@@ -1,3 +1,8 @@
+experiment_results/*
+results_test/*
+results_harder/*
+
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
