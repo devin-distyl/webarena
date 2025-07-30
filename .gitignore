@@ -1,6 +1,5 @@
 experiment_results/*
-results_test/*
-results_harder/*
+parallel_demo_results/20*
 
 
 # Byte-compiled / optimized / DLL files

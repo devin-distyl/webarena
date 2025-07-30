@@ -261,18 +261,36 @@ def generate_from_openai_chat_completion(
         raise ValueError(
             "OPENAI_API_KEY environment variable must be set when using OpenAI API."
         )
-    openai.api_key = os.environ["OPENAI_API_KEY"]
-    openai.organization = os.environ.get("OPENAI_ORGANIZATION", "")
-
-    response = openai.ChatCompletion.create(  # type: ignore
-        model=model,
-        messages=messages,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        top_p=top_p,
-        stop=[stop_token] if stop_token else None,
-    )
-    answer: str = response["choices"][0]["message"]["content"]
+    
+    if OPENAI_V1:
+        # OpenAI v1.x API
+        client = OpenAI(
+            api_key=os.environ["OPENAI_API_KEY"],
+            organization=os.environ.get("OPENAI_ORGANIZATION", None)
+        )
+        response = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            top_p=top_p,
+            stop=[stop_token] if stop_token else None,
+        )
+        answer: str = response.choices[0].message.content
+    else:
+        # OpenAI v0.x API (legacy)
+        openai.api_key = os.environ["OPENAI_API_KEY"]
+        openai.organization = os.environ.get("OPENAI_ORGANIZATION", "")
+        response = openai.ChatCompletion.create(  # type: ignore
+            model=model,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            top_p=top_p,
+            stop=[stop_token] if stop_token else None,
+        )
+        answer: str = response["choices"][0]["message"]["content"]
+    
     return answer
 
 

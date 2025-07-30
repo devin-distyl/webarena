@@ -253,26 +253,35 @@ def test(
                 task_id = _c["task_id"]
                 # automatically login
                 if _c["storage_state"]:
-                    cookie_file_name = os.path.basename(_c["storage_state"])
-                    comb = get_site_comb_from_filepath(cookie_file_name)
-                    temp_dir = tempfile.mkdtemp()
-                    # subprocess to renew the cookie
-                    subprocess.run(
-                        [
-                            "python",
-                            "browser_env/auto_login.py",
-                            "--auth_folder",
-                            temp_dir,
-                            "--site_list",
-                            *comb,
-                        ]
-                    )
-                    _c["storage_state"] = f"{temp_dir}/{cookie_file_name}"
-                    assert os.path.exists(_c["storage_state"])
-                    # update the config file
-                    config_file = f"{temp_dir}/{os.path.basename(config_file)}"
-                    with open(config_file, "w") as f:
-                        json.dump(_c, f)
+                    # Check if existing storage state file exists and is valid
+                    if os.path.exists(_c["storage_state"]):
+                        logger.info(f"Using existing storage state: {_c['storage_state']}")
+                    else:
+                        cookie_file_name = os.path.basename(_c["storage_state"])
+                        comb = get_site_comb_from_filepath(cookie_file_name)
+                        temp_dir = tempfile.mkdtemp()
+                        # subprocess to renew the cookie
+                        try:
+                            subprocess.run(
+                                [
+                                    "python",
+                                    "browser_env/auto_login.py",
+                                    "--auth_folder",
+                                    temp_dir,
+                                    "--site_list",
+                                    *comb,
+                                ],
+                                check=True
+                            )
+                            _c["storage_state"] = f"{temp_dir}/{cookie_file_name}"
+                            assert os.path.exists(_c["storage_state"])
+                            # update the config file
+                            config_file = f"{temp_dir}/{os.path.basename(config_file)}"
+                            with open(config_file, "w") as f:
+                                json.dump(_c, f)
+                        except (subprocess.CalledProcessError, AssertionError) as e:
+                            logger.warning(f"Failed to renew cookies: {e}. Proceeding without authentication.")
+                            _c["storage_state"] = None
 
             logger.info(f"[Config file]: {config_file}")
             logger.info(f"[Intent]: {intent}")
@@ -347,17 +356,18 @@ def test(
                     Path(args.result_dir) / "traces" / f"{task_id}.zip"
                 )
 
-        except openai.error.OpenAIError as e:
-            logger.info(f"[OpenAI Error] {repr(e)}")
         except Exception as e:
-            logger.info(f"[Unhandled Error] {repr(e)}]")
-            import traceback
+            if "openai" in str(type(e)).lower():
+                logger.info(f"[OpenAI Error] {repr(e)}")
+            else:
+                logger.info(f"[Unhandled Error] {repr(e)}]")
+                import traceback
 
-            # write to error file
-            with open(Path(args.result_dir) / "error.txt", "a") as f:
-                f.write(f"[Config file]: {config_file}\n")
-                f.write(f"[Unhandled Error] {repr(e)}\n")
-                f.write(traceback.format_exc())  # write stack trace to file
+                # write to error file
+                with open(Path(args.result_dir) / "error.txt", "a") as f:
+                    f.write(f"[Config file]: {config_file}\n")
+                    f.write(f"[Unhandled Error] {repr(e)}\n")
+                    f.write(traceback.format_exc())  # write stack trace to file
 
         render_helper.close()
 
