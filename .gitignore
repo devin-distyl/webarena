@@ -109,6 +109,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+webarena-env/
 
 # Spyder project settings
 .spyderproject
@@ -133,6 +134,11 @@ dmypy.json
 
 .vscode
 *tmp*
+
+# Docker Images
+*.tar
+shopping_admin_final_0719.tar
+shopping_final_0712.tar
 
 .auth/*
 
