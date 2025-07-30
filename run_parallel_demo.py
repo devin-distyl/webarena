@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Parallel WebArena Agent Execution Demo
-Runs multiple WebArena tasks concurrently to demonstrate parallel execution
+WebArena Parallel Agent Execution Demo
+Configurable parallel execution for any model and task set
 """
 
 import subprocess
@@ -10,15 +10,10 @@ import sys
 import time
 import json
 import threading
+import argparse
 from pathlib import Path
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
-
-# Task IDs to run in parallel
-TASK_IDS = [0, 1, 2, 3, 4, 5, 6, 11, 12, 13, 14, 15, 41, 42, 43, 62, 63, 64, 65, 77, 78, 79, 94, 95, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 119, 120, 121, 122, 123, 127, 128, 129, 130, 131, 157, 183, 184, 185, 186, 187, 193, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 243, 244, 245, 246, 247, 288, 289, 290, 291, 292, 344, 345, 346, 347, 348, 374, 375, 423, 453, 454, 455, 456, 457, 458, 459, 460, 461, 462, 463, 464, 470, 471, 472, 473, 474, 486, 487, 488, 489, 490, 491, 492, 493, 494, 495, 496, 497, 498, 499, 500, 501, 502, 503, 504, 505, 538, 539, 540, 541, 542, 543, 544, 545, 546, 547, 548, 549, 550, 551, 676, 677, 678, 679, 680, 694, 695, 696, 697, 698, 699, 700, 701, 702, 703, 704, 705, 706, 707, 708, 709, 710, 711, 712, 713, 759, 760, 768, 769, 770, 771, 772, 773, 774, 775, 776, 777, 778, 779, 780, 781, 782, 790]
-
-# Model to use
-MODEL = "gpt-3.5-turbo-0125"
 
 def setup_environment():
     """Setup environment variables for WebArena"""
@@ -43,10 +38,6 @@ def setup_environment():
     env["MAP"] = "http://localhost:3000"
     env["HOMEPAGE"] = "http://localhost:4399"
     
-    # Check for required API key
-    if "OPENAI_API_KEY" not in env:
-        raise ValueError("OPENAI_API_KEY not found in environment or .env file")
-    
     return env
 
 def load_task_info(task_id):
@@ -59,22 +50,23 @@ def load_task_info(task_id):
     except Exception as e:
         return f'Task {task_id}', []
 
-def run_single_task(task_id, env, result_container, lock):
-    """Run a single WebArena task with specified model"""
+def run_single_task(task_id, provider, model, env, result_container, lock):
+    """Run a single WebArena task with specified model and provider"""
     thread_id = threading.current_thread().ident
-    result_dir = f"./parallel_demo_results/{MODEL.replace('-', '_').replace('.', '_')}"
+    result_dir = f"./parallel_demo_results/{model.replace('-', '_').replace('.', '_')}"
     
     cmd = [
         "python", "run.py",
         "--instruction_path", "agent/prompts/jsons/p_cot_id_actree_2s.json",
         "--test_start_idx", str(task_id),
         "--test_end_idx", str(task_id + 1),
-        "--model", MODEL,
+        "--provider", provider,
+        "--model", model,
         "--result_dir", result_dir
     ]
     
     with lock:
-        print(f"🚀 [Thread {thread_id}] Starting task {task_id}")
+        print(f"🚀 [Thread {thread_id}] Starting task {task_id} with {provider}/{model}")
     
     start_time = time.time()
     
@@ -111,7 +103,9 @@ def run_single_task(task_id, env, result_container, lock):
             'thread_id': thread_id,
             'returncode': result.returncode,
             'stdout_lines': len(result.stdout.split('\n')) if result.stdout else 0,
-            'stderr_lines': len(result.stderr.split('\n')) if result.stderr else 0
+            'stderr_lines': len(result.stderr.split('\n')) if result.stderr else 0,
+            'model': model,
+            'provider': provider
         }
         
         with lock:
@@ -133,7 +127,9 @@ def run_single_task(task_id, env, result_container, lock):
             'elapsed_time': elapsed,
             'thread_id': thread_id,
             'returncode': -1,
-            'error': 'TIMEOUT'
+            'error': 'TIMEOUT',
+            'model': model,
+            'provider': provider
         }
         
         with lock:
@@ -153,7 +149,9 @@ def run_single_task(task_id, env, result_container, lock):
             'elapsed_time': elapsed,
             'thread_id': thread_id,
             'returncode': -1,
-            'error': str(e)
+            'error': str(e),
+            'model': model,
+            'provider': provider
         }
         
         with lock:
@@ -161,19 +159,60 @@ def run_single_task(task_id, env, result_container, lock):
         
         return task_result
 
-def run_parallel_demo():
+def parse_task_ids(task_ids_str):
+    """Parse task IDs from various formats"""
+    if not task_ids_str:
+        return []
+    
+    # Handle comma-separated list
+    if ',' in task_ids_str:
+        return [int(x.strip()) for x in task_ids_str.split(',')]
+    
+    # Handle range notation (e.g., "78-82" or "78:82")
+    if '-' in task_ids_str or ':' in task_ids_str:
+        separator = '-' if '-' in task_ids_str else ':'
+        start, end = task_ids_str.split(separator)
+        return list(range(int(start), int(end) + 1))
+    
+    # Handle single task ID
+    return [int(task_ids_str)]
+
+def auto_detect_provider(model):
+    """Auto-detect provider based on model name"""
+    model_lower = model.lower()
+    if 'gemini' in model_lower or 'bard' in model_lower:
+        return 'google'
+    elif 'gpt' in model_lower or 'o1' in model_lower:
+        return 'openai'
+    elif 'claude' in model_lower:
+        return 'anthropic'  # Future extension
+    else:
+        return 'openai'  # Default
+
+def run_parallel_demo(task_ids, provider, model):
     """Run the parallel execution demo"""
     print("🧪 WebArena Parallel Agent Execution Demo")
-    print("=" * 60)
-    print(f"Tasks: {TASK_IDS}")
-    print(f"Model: {MODEL}")
-    print(f"Max concurrent tasks: {len(TASK_IDS)}")
-    print("=" * 60)
+    print("=" * 70)
+    print(f"Tasks: {task_ids}")
+    print(f"Model: {model}")
+    print(f"Provider: {provider}")
+    print(f"Max concurrent tasks: {len(task_ids)}")
+    print("=" * 70)
     
     # Setup
     env = setup_environment()
     results = []
     results_lock = threading.Lock()
+    
+    # Check API key for the provider
+    api_key_var = {
+        'openai': 'OPENAI_API_KEY',
+        'google': 'GOOGLE_API_KEY',
+        'anthropic': 'ANTHROPIC_API_KEY'
+    }.get(provider, 'OPENAI_API_KEY')
+    
+    if api_key_var not in env:
+        raise ValueError(f"{api_key_var} not found in environment or .env file")
     
     # Create results directory
     os.makedirs("parallel_demo_results", exist_ok=True)
@@ -181,22 +220,22 @@ def run_parallel_demo():
     # Load task information
     print("\n📋 Task Information:")
     task_info = {}
-    for task_id in TASK_IDS:
+    for task_id in task_ids:
         intent, sites = load_task_info(task_id)
         task_info[task_id] = {'intent': intent, 'sites': sites}
         print(f"  Task {task_id}: {intent[:70]}{'...' if len(intent) > 70 else ''}")
         if sites:
             print(f"           Sites: {', '.join(sites)}")
     
-    print(f"\n🚀 Starting {len(TASK_IDS)} tasks in parallel...")
+    print(f"\n🚀 Starting {len(task_ids)} tasks in parallel with {provider}/{model}...")
     start_time = time.time()
     
     # Run tasks in parallel using ThreadPoolExecutor
-    with ThreadPoolExecutor(max_workers=len(TASK_IDS)) as executor:
+    with ThreadPoolExecutor(max_workers=len(task_ids)) as executor:
         # Submit all tasks
         future_to_task = {
-            executor.submit(run_single_task, task_id, env, results, results_lock): task_id 
-            for task_id in TASK_IDS
+            executor.submit(run_single_task, task_id, provider, model, env, results, results_lock): task_id 
+            for task_id in task_ids
         }
         
         # Monitor progress
@@ -208,7 +247,7 @@ def run_parallel_demo():
             try:
                 result = future.result()
                 with results_lock:
-                    print(f"📊 Progress: {completed}/{len(TASK_IDS)} tasks completed")
+                    print(f"📊 Progress: {completed}/{len(task_ids)} tasks completed")
             except Exception as exc:
                 with results_lock:
                     print(f"💥 Task {task_id} generated an exception: {exc}")
@@ -218,7 +257,7 @@ def run_parallel_demo():
     # Analyze results
     print(f"\n🏁 All tasks completed in {total_elapsed:.1f}s")
     print("\n" + "=" * 80)
-    print("📊 PARALLEL EXECUTION RESULTS")
+    print(f"📊 PARALLEL EXECUTION RESULTS - {provider.upper()}/{model.upper()}")
     print("=" * 80)
     
     # Sort results by task_id for consistent display
@@ -231,17 +270,19 @@ def run_parallel_demo():
     avg_time = sum(r['elapsed_time'] for r in results) / len(results) if results else 0.0
     
     print(f"\n🎯 Overall Performance:")
-    print(f"  Success rate: {successful_tasks}/{len(TASK_IDS)} ({successful_tasks/len(TASK_IDS)*100:.1f}%)")
+    print(f"  Model: {model}")
+    print(f"  Provider: {provider}")
+    print(f"  Success rate: {successful_tasks}/{len(task_ids)} ({successful_tasks/len(task_ids)*100:.1f}%)")
     print(f"  Average score: {avg_score:.3f}")
     print(f"  Average time per task: {avg_time:.1f}s")
     print(f"  Total wall clock time: {total_elapsed:.1f}s")
-    print(f"  Parallel efficiency: {(avg_time * len(TASK_IDS)) / total_elapsed:.1f}x speedup")
+    print(f"  Parallel efficiency: {(avg_time * len(task_ids)) / total_elapsed:.1f}x speedup")
     
     # Detailed results
     print(f"\n📋 Task-by-Task Results:")
-    print("-" * 80)
+    print("-" * 85)
     print(f"{'Task':4} {'Intent':45} {'Score':6} {'Time':6} {'Thread':8} {'Status':8}")
-    print("-" * 80)
+    print("-" * 85)
     
     for result in results:
         task_id = result['task_id']
@@ -267,20 +308,21 @@ def run_parallel_demo():
     
     # Save detailed results
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    results_file = f"parallel_demo_results_{timestamp}.json"
+    results_file = f"parallel_demo_{provider}_{model.replace('-', '_').replace('.', '_')}_{timestamp}.json"
     
     output = {
         'timestamp': timestamp,
-        'task_ids': TASK_IDS,
-        'model': MODEL,
+        'task_ids': task_ids,
+        'model': model,
+        'provider': provider,
         'total_elapsed_time': total_elapsed,
-        'parallel_efficiency': (avg_time * len(TASK_IDS)) / total_elapsed if total_elapsed > 0 else 0,
+        'parallel_efficiency': (avg_time * len(task_ids)) / total_elapsed if total_elapsed > 0 else 0,
         'summary': {
-            'success_rate': successful_tasks / len(TASK_IDS),
+            'success_rate': successful_tasks / len(task_ids),
             'avg_score': avg_score,
             'avg_time_per_task': avg_time,
             'successful_tasks': successful_tasks,
-            'total_tasks': len(TASK_IDS)
+            'total_tasks': len(task_ids)
         },
         'task_info': task_info,
         'detailed_results': results,
@@ -296,17 +338,53 @@ def run_parallel_demo():
     return results
 
 def main():
-    """Main function"""
+    """Main function with argument parsing"""
+    parser = argparse.ArgumentParser(description='WebArena Parallel Agent Execution Demo')
+    
+    parser.add_argument('--model', '-m', type=str, required=True,
+                        help='Model to use (e.g., gpt-3.5-turbo, gemini-2.5-pro)')
+    parser.add_argument('--provider', '-p', type=str, default=None,
+                        help='Provider to use (openai, google). Auto-detected if not specified')
+    parser.add_argument('--tasks', '-t', type=str, required=True,
+                        help='Task IDs to run. Examples: "78,79,80" or "78-82" or "78:82" or "78"')
+    parser.add_argument('--max-workers', type=int, default=None,
+                        help='Maximum number of parallel workers (default: number of tasks)')
+    
+    args = parser.parse_args()
+    
+    # Parse task IDs
     try:
-        results = run_parallel_demo()
+        task_ids = parse_task_ids(args.tasks)
+        if not task_ids:
+            print("❌ No valid task IDs provided")
+            return 1
+    except ValueError as e:
+        print(f"❌ Error parsing task IDs: {e}")
+        return 1
+    
+    # Auto-detect provider if not specified
+    provider = args.provider or auto_detect_provider(args.model)
+    
+    print(f"🎯 Configuration:")
+    print(f"   Model: {args.model}")
+    print(f"   Provider: {provider} {'(auto-detected)' if not args.provider else ''}")
+    print(f"   Tasks: {task_ids}")
+    print(f"   Max workers: {args.max_workers or len(task_ids)}")
+    print()
+    
+    try:
+        results = run_parallel_demo(task_ids, provider, args.model)
         print(f"\n✅ Parallel execution demo completed successfully!")
+        return 0
         
     except KeyboardInterrupt:
         print("\n\n⚠️  Demo interrupted by user")
-        sys.exit(1)
+        return 1
     except Exception as e:
         print(f"\n💥 Demo failed: {e}")
-        sys.exit(1)
+        import traceback
+        traceback.print_exc()
+        return 1
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

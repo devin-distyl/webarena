@@ -10,7 +10,18 @@ from typing import Any
 
 import aiolimiter
 import openai
-import openai.error
+try:
+    # OpenAI v0.x imports
+    import openai.error
+    RateLimitError = openai.error.RateLimitError
+    APIError = openai.error.APIError
+    OPENAI_V1 = False
+except ImportError:
+    # OpenAI v1.x imports  
+    from openai import OpenAI
+    RateLimitError = openai.RateLimitError
+    APIError = openai.APIError
+    OPENAI_V1 = True
 from tqdm.asyncio import tqdm_asyncio
 
 
@@ -20,7 +31,7 @@ def retry_with_exponential_backoff(  # type: ignore
     exponential_base: float = 2,
     jitter: bool = True,
     max_retries: int = 3,
-    errors: tuple[Any] = (openai.error.RateLimitError,),
+    errors: tuple[Any] = (RateLimitError,),
 ):
     """Retry a function with exponential backoff."""
 
@@ -75,12 +86,12 @@ async def _throttled_openai_completion_acreate(
                     max_tokens=max_tokens,
                     top_p=top_p,
                 )
-            except openai.error.RateLimitError:
+            except RateLimitError:
                 logging.warning(
                     "OpenAI API rate limit exceeded. Sleeping for 10 seconds."
                 )
                 await asyncio.sleep(10)
-            except openai.error.APIError as e:
+            except APIError as e:
                 logging.warning(f"OpenAI API error: {e}")
                 break
         return {"choices": [{"message": {"content": ""}}]}
@@ -177,7 +188,7 @@ async def _throttled_openai_chat_completion_acreate(
                     max_tokens=max_tokens,
                     top_p=top_p,
                 )
-            except openai.error.RateLimitError:
+            except RateLimitError:
                 logging.warning(
                     "OpenAI API rate limit exceeded. Sleeping for 10 seconds."
                 )
@@ -185,7 +196,7 @@ async def _throttled_openai_chat_completion_acreate(
             except asyncio.exceptions.TimeoutError:
                 logging.warning("OpenAI API timeout. Sleeping for 10 seconds.")
                 await asyncio.sleep(10)
-            except openai.error.APIError as e:
+            except APIError as e:
                 logging.warning(f"OpenAI API error: {e}")
                 break
         return {"choices": [{"message": {"content": ""}}]}
