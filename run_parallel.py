@@ -122,7 +122,7 @@ def run_single_task_isolated(task_id, provider, model, base_env, result_containe
                 cmd[i + 1] = temp_config_path
         
         # Activate virtual environment and run with isolated environment
-        activate_cmd = "source env/webarena-env/bin/activate && " + " ".join(cmd)
+        activate_cmd = "source webarena-env/bin/activate && " + " ".join(cmd)
         result = subprocess.run(
             activate_cmd,
             shell=True,

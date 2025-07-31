@@ -67,7 +67,9 @@ class ExperimentLoader:
             'task_count': 0,
             'success_rate': 0.0,
             'avg_score': 0.0,
-            'tasks': []
+            'tasks': [],
+            'task_info': {},
+            'detailed_results': []
         }
         
         # Try different possible result file names
@@ -105,12 +107,12 @@ class ExperimentLoader:
                     render_files = list(task_dir.glob('render_*.html'))
                     has_render = len(render_files) > 0
                     
-                    # Get task info from summary
-                    task_info = summary['task_info'].get(str(task_id), {})
+                    # Get task info from summary (with safe access)
+                    task_info = summary.get('task_info', {}).get(str(task_id), {})
                     
-                    # Get detailed results
+                    # Get detailed results (with safe access)
                     task_result = None
-                    for result in summary['detailed_results']:
+                    for result in summary.get('detailed_results', []):
                         if result.get('task_id') == task_id:
                             task_result = result
                             break
@@ -128,7 +130,9 @@ class ExperimentLoader:
                     
                     tasks.append(task_data)
                     
-                except (ValueError, IndexError):
+                except (ValueError, IndexError, KeyError, TypeError) as e:
+                    # Log the error but continue processing other tasks
+                    print(f"Warning: Error processing task {task_dir.name}: {e}")
                     continue
         
         # Sort tasks by ID
@@ -292,51 +296,74 @@ loader = ExperimentLoader(RESULTS_DIR)
 @app.route('/')
 def index():
     """Main page showing experiment list"""
-    experiments = loader.get_all_experiments()
-    
-    # Get most recent experiment as default
-    selected_exp = experiments[0] if experiments else None
-    
-    return render_template('index.html', 
-                         experiments=experiments, 
-                         selected_exp=selected_exp)
+    try:
+        experiments = loader.get_all_experiments()
+        
+        # Get most recent experiment as default
+        selected_exp = experiments[0] if experiments else None
+        
+        return render_template('index.html', 
+                             experiments=experiments, 
+                             selected_exp=selected_exp)
+    except Exception as e:
+        app.logger.error(f"Error loading experiments: {str(e)}")
+        return render_template('index.html', 
+                             experiments=[], 
+                             selected_exp=None,
+                             error=f"Error loading experiments: {str(e)}")
 
 @app.route('/api/experiments')
 def api_experiments():
     """API endpoint to get all experiments"""
-    experiments = loader.get_all_experiments()
-    return jsonify(experiments)
+    try:
+        experiments = loader.get_all_experiments()
+        return jsonify(experiments)
+    except Exception as e:
+        app.logger.error(f"Error in api_experiments: {str(e)}")
+        return jsonify({'error': f'Failed to load experiments: {str(e)}'}), 500
 
 @app.route('/api/experiment/<exp_id>')
 def api_experiment(exp_id):
     """API endpoint to get specific experiment details"""
-    experiments = loader.get_all_experiments()
-    exp = next((e for e in experiments if e['id'] == exp_id), None)
-    
-    if not exp:
-        return jsonify({'error': 'Experiment not found'}), 404
-    
-    return jsonify(exp)
+    try:
+        experiments = loader.get_all_experiments()
+        exp = next((e for e in experiments if e['id'] == exp_id), None)
+        
+        if not exp:
+            return jsonify({'error': 'Experiment not found'}), 404
+        
+        return jsonify(exp)
+    except Exception as e:
+        app.logger.error(f"Error in api_experiment: {str(e)}")
+        return jsonify({'error': f'Failed to load experiment: {str(e)}'}), 500
 
 @app.route('/api/task/<exp_id>/<int:task_id>')
 def api_task(exp_id, task_id):
     """API endpoint to get task details"""
-    task_data = loader.get_task_config(exp_id, task_id)
-    
-    if not task_data:
-        return jsonify({'error': 'Task not found'}), 404
-    
-    return jsonify(task_data)
+    try:
+        task_data = loader.get_task_config(exp_id, task_id)
+        
+        if not task_data:
+            return jsonify({'error': 'Task not found'}), 404
+        
+        return jsonify(task_data)
+    except Exception as e:
+        app.logger.error(f"Error in api_task: {str(e)}")
+        return jsonify({'error': f'Failed to load task: {str(e)}'}), 500
 
 @app.route('/api/task/<exp_id>/<int:task_id>/parsed')
 def api_task_parsed(exp_id, task_id):
     """API endpoint to get parsed task execution data"""
-    parsed_data = loader.parse_render_html(exp_id, task_id)
-    
-    if not parsed_data:
-        return jsonify({'error': 'Task not found'}), 404
-    
-    return jsonify(parsed_data)
+    try:
+        parsed_data = loader.parse_render_html(exp_id, task_id)
+        
+        if not parsed_data:
+            return jsonify({'error': 'Task not found'}), 404
+        
+        return jsonify(parsed_data)
+    except Exception as e:
+        app.logger.error(f"Error in api_task_parsed: {str(e)}")
+        return jsonify({'error': f'Failed to parse task data: {str(e)}'}), 500
 
 @app.route('/render/<exp_id>/<int:task_id>')
 def render_task(exp_id, task_id):
