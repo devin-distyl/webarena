@@ -428,6 +428,122 @@
         ::-webkit-scrollbar-thumb:hover {
             background: #a8a8a8;
         }
+
+        /* Screenshot Modal */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: modalFadeIn 0.2s ease-out;
+        }
+
+        .modal-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            cursor: pointer;
+        }
+
+        .modal-content {
+            position: relative;
+            max-width: 95vw;
+            max-height: 95vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 10001;
+        }
+
+        .modal-content img {
+            max-width: 100%;
+            max-height: 85vh;
+            width: auto;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            cursor: pointer;
+            transition: transform 0.1s ease;
+        }
+
+        .modal-content img:hover {
+            transform: scale(1.01);
+        }
+
+        .modal-close {
+            position: absolute;
+            top: -50px;
+            right: -10px;
+            font-size: 40px;
+            color: white;
+            cursor: pointer;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 300;
+            transition: all 0.2s ease;
+        }
+
+        .modal-close:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.1);
+        }
+
+        .modal-info {
+            margin-top: 15px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .modal-info span {
+            color: white;
+            font-size: 14px;
+        }
+
+        .modal-hint {
+            opacity: 0.7;
+            font-size: 12px !important;
+        }
+
+        @keyframes modalFadeIn {
+            from {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .modal-fade-out {
+            animation: modalFadeOut 0.2s ease-in forwards;
+        }
+
+        @keyframes modalFadeOut {
+            from {
+                opacity: 1;
+                transform: scale(1);
+            }
+            to {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+        }
     </style>
 </head>
 <body>
@@ -718,13 +834,13 @@
                             <div class="screenshot-section">
                                 <div class="screenshot-label">📸 Browser State</div>
                                 <div class="screenshot-container">
-                                    <img src="${screenshots[0]}" alt="Step ${step.step} screenshot" />
+                                    <img src="${screenshots[0]}" alt="Step ${step.step} screenshot" onclick="openScreenshotModal('${screenshots[0]}', ${step.step})" />
                                 </div>
                             </div>
                         `;
                     } else {
                         const screenshotImgs = screenshots.map((src, idx) => 
-                            `<img src="${src}" alt="Step ${step.step} screenshot ${idx + 1}" />`
+                            `<img src="${src}" alt="Step ${step.step} screenshot ${idx + 1}" onclick="openScreenshotModal('${src}', ${step.step})" />`
                         ).join('');
                         
                         screenshotHtml = `
@@ -822,6 +938,54 @@
             document.getElementById('task-header').style.display = 'none';
             showNoSelection();
         }
+
+        // Screenshot Modal Functions
+        function openScreenshotModal(imageSrc, stepNumber) {
+            const modal = document.getElementById('screenshot-modal');
+            const modalImg = document.getElementById('modal-screenshot');
+            const stepInfo = document.getElementById('modal-step-info');
+            
+            modalImg.src = imageSrc;
+            stepInfo.textContent = `Step ${stepNumber} - Browser State`;
+            modal.style.display = 'flex';
+            
+            // Prevent body scrolling when modal is open
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeScreenshotModal() {
+            const modal = document.getElementById('screenshot-modal');
+            modal.classList.add('modal-fade-out');
+            
+            setTimeout(() => {
+                modal.style.display = 'none';
+                modal.classList.remove('modal-fade-out');
+                document.body.style.overflow = '';
+            }, 200);
+        }
+
+        // Add keyboard listener for ESC key
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                const modal = document.getElementById('screenshot-modal');
+                if (modal.style.display === 'flex') {
+                    closeScreenshotModal();
+                }
+            }
+        });
     </script>
+
+    <!-- Screenshot Modal -->
+    <div id="screenshot-modal" class="modal" style="display: none;">
+        <div class="modal-overlay" onclick="closeScreenshotModal()"></div>
+        <div class="modal-content">
+            <img id="modal-screenshot" src="" alt="Screenshot" onclick="closeScreenshotModal()" />
+            <div class="modal-close" onclick="closeScreenshotModal()">&times;</div>
+            <div class="modal-info">
+                <span id="modal-step-info">Step 1</span>
+                <span class="modal-hint">Click image or press ESC to close</span>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
