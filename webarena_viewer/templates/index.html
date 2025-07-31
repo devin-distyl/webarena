@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebArena Experiment Viewer</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f5f5f5;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1rem;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+            position: relative;
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .main-container {
+            display: flex;
+            height: calc(100vh - 80px);
+        }
+
+        /* Left Sidebar - Experiments */
+        .sidebar {
+            width: 280px;
+            background: white;
+            border-right: 1px solid #e0e0e0;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+
+        .sidebar-section {
+            padding: 1rem;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .sidebar-section h3 {
+            font-size: 1rem;
+            color: #333;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+
+        .experiment-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .experiment-item {
+            padding: 0.75rem;
+            margin: 0.25rem 0;
+            border-radius: 6px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.2s ease;
+        }
+
+        .experiment-item:hover {
+            background-color: #f8f9fa;
+        }
+
+        .experiment-item.active {
+            background-color: #e3f2fd;
+            border-color: #2196f3;
+        }
+
+        .experiment-meta {
+            font-size: 0.75rem;
+            color: #666;
+            margin-top: 0.25rem;
+        }
+
+        .experiment-stats {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.7rem;
+            color: #888;
+            margin-top: 0.25rem;
+        }
+
+        .task-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+
+        .task-item {
+            padding: 0.5rem;
+            text-align: center;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            border: 2px solid transparent;
+            transition: all 0.2s ease;
+            min-height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .task-item:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .task-item.active {
+            border-color: #4caf50;
+            background-color: #e8f5e8;
+        }
+
+        .task-item.success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .task-item.failed {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+
+        .task-item.partial {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+
+        /* Main Content Area */
+        .content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .task-header {
+            background: white;
+            padding: 1.5rem;
+            border-bottom: 1px solid #e0e0e0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+        }
+
+        .task-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 0.75rem;
+        }
+
+        .task-intent {
+            font-size: 1rem;
+            color: #2c3e50;
+            background: #f7f9fc;
+            padding: 1rem;
+            border-radius: 6px;
+            border-left: 4px solid #3498db;
+            margin-bottom: 1rem;
+        }
+
+        .task-meta {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+        }
+
+        .meta-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .meta-label {
+            font-size: 0.75rem;
+            color: #666;
+            text-transform: uppercase;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+
+        .meta-value {
+            font-weight: 500;
+        }
+
+        .status-success {
+            color: #27ae60;
+        }
+
+        .status-failed {
+            color: #e74c3c;
+        }
+
+        .status-partial {
+            color: #f39c12;
+        }
+
+        .answer-section {
+            margin-top: 1rem;
+        }
+
+        .answer-label {
+            font-size: 0.75rem;
+            color: #666;
+            text-transform: uppercase;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+
+        .answer-value {
+            font-size: 0.9rem;
+            font-weight: 500;
+            padding: 0.5rem;
+            background: #f8f9fa;
+            border-radius: 4px;
+            border-left: 4px solid #28a745;
+        }
+
+        /* Execution Display */
+        .render-container {
+            flex: 1;
+            background: white;
+            position: relative;
+            overflow-y: auto;
+            padding: 1rem;
+        }
+
+        .execution-steps {
+            max-width: 100%;
+        }
+
+        .step-item {
+            margin-bottom: 2rem;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .step-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 0.75rem 1rem;
+            font-weight: 600;
+        }
+
+        .step-content {
+            padding: 1rem;
+        }
+
+        .thinking-section {
+            margin-bottom: 1rem;
+        }
+
+        .thinking-label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 0.5rem;
+        }
+
+        .thinking-content {
+            background: #f8f9fa;
+            padding: 0.75rem;
+            border-radius: 4px;
+            border-left: 4px solid #17a2b8;
+            white-space: pre-wrap;
+            font-size: 0.85rem;
+            line-height: 1.4;
+        }
+
+        .action-section {
+            margin-bottom: 1rem;
+        }
+
+        .action-label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 0.5rem;
+        }
+
+        .action-content {
+            background: #fff3cd;
+            padding: 0.75rem;
+            border-radius: 4px;
+            border-left: 4px solid #ffc107;
+            font-family: monospace;
+            font-size: 0.9rem;
+        }
+
+        .screenshot-section img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .screenshot-label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 0.5rem;
+        }
+
+        .no-selection {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #666;
+            font-size: 1.1rem;
+        }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #666;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin-right: 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 240px;
+            }
+            
+            .task-meta {
+                grid-template-columns: 1fr;
+            }
+            
+            .step-content {
+                padding: 0.75rem;
+            }
+            
+            .thinking-content, .action-content {
+                font-size: 0.8rem;
+            }
+        }
+
+        /* Scrollbar Styling */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🌐 WebArena Experiment Viewer</h1>
+    </div>
+
+    <div class="main-container">
+        <!-- Left Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-section">
+                <h3>Experiments</h3>
+                <div class="experiment-list" id="experiment-list">
+                    <!-- Experiments will be loaded here -->
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <h3>Tasks</h3>
+                <div class="task-grid" id="task-grid">
+                    <!-- Tasks will be loaded here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="content">
+            <div class="task-header" id="task-header" style="display: none;">
+                <div class="task-title" id="task-title"></div>
+                <div class="task-intent" id="task-intent"></div>
+                <div class="task-meta" id="task-meta"></div>
+                <div class="answer-section" id="answer-section" style="display: none;">
+                    <div class="answer-label">Expected Answer</div>
+                    <div class="answer-value" id="answer-value"></div>
+                </div>
+            </div>
+
+            <div class="render-container">
+                <div class="no-selection" id="no-selection">
+                    Select an experiment and task to view results
+                </div>
+                <div class="loading" id="loading" style="display: none;">
+                    <div class="spinner"></div>
+                    Loading task data...
+                </div>
+                <div class="execution-steps" id="execution-steps" style="display: none;">
+                    <!-- Steps will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global state
+        let experiments = [];
+        let currentExperiment = null;
+        let currentTask = null;
+
+        // Load experiments on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadExperiments();
+        });
+
+        async function loadExperiments() {
+            try {
+                const response = await fetch('/api/experiments');
+                experiments = await response.json();
+                renderExperiments();
+                
+                // Auto-select most recent experiment
+                if (experiments.length > 0) {
+                    selectExperiment(experiments[0].id);
+                }
+            } catch (error) {
+                console.error('Error loading experiments:', error);
+            }
+        }
+
+        function renderExperiments() {
+            const list = document.getElementById('experiment-list');
+            list.innerHTML = '';
+
+            experiments.forEach(exp => {
+                const item = document.createElement('div');
+                item.className = 'experiment-item';
+                item.onclick = () => selectExperiment(exp.id);
+                
+                const successRate = (exp.summary.success_rate * 100).toFixed(1);
+                const avgScore = exp.summary.avg_score.toFixed(2);
+                const taskCount = exp.summary.task_count;
+                
+                item.innerHTML = `
+                    <div><strong>${exp.summary.model}</strong></div>
+                    <div class="experiment-meta">${exp.timestamp_str}</div>
+                    <div class="experiment-stats">
+                        <span>${taskCount} tasks</span>
+                        <span>${successRate}% success</span>
+                        <span>Score: ${avgScore}</span>
+                    </div>
+                `;
+                
+                list.appendChild(item);
+            });
+        }
+
+        function selectExperiment(expId) {
+            currentExperiment = experiments.find(exp => exp.id === expId);
+            
+            // Update UI
+            document.querySelectorAll('.experiment-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            
+            const items = document.querySelectorAll('.experiment-item');
+            const expIndex = experiments.findIndex(exp => exp.id === expId);
+            if (expIndex >= 0 && items[expIndex]) {
+                items[expIndex].classList.add('active');
+            }
+            
+            renderTasks();
+            clearTaskDisplay();
+            
+            // Auto-select task 0 if available
+            if (currentExperiment.summary.tasks.length > 0) {
+                const firstTask = currentExperiment.summary.tasks.find(task => task.id === 0) || currentExperiment.summary.tasks[0];
+                selectTask(firstTask.id);
+            }
+        }
+
+        function renderTasks() {
+            const grid = document.getElementById('task-grid');
+            grid.innerHTML = '';
+
+            if (!currentExperiment) return;
+
+            currentExperiment.summary.tasks.forEach(task => {
+                const item = document.createElement('div');
+                item.className = 'task-item';
+                item.onclick = () => selectTask(task.id);
+                
+                // Color based on success/score
+                if (task.success && task.score > 0.8) {
+                    item.classList.add('success');
+                } else if (task.success && task.score > 0.3) {
+                    item.classList.add('partial');
+                } else {
+                    item.classList.add('failed');
+                }
+                
+                item.innerHTML = `<div>${task.id}</div>`;
+                grid.appendChild(item);
+            });
+        }
+
+        async function selectTask(taskId) {
+            if (!currentExperiment) return;
+            
+            currentTask = currentExperiment.summary.tasks.find(task => task.id === taskId);
+            if (!currentTask) return;
+            
+            // Update task selection UI - handle both click and programmatic selection
+            document.querySelectorAll('.task-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            
+            // Find the correct task element and mark it active
+            const taskElements = document.querySelectorAll('.task-item');
+            taskElements.forEach(item => {
+                if (item.textContent.trim() === taskId.toString()) {
+                    item.classList.add('active');
+                }
+            });
+            
+            // Show loading
+            showLoading();
+            
+            try {
+                // Load task details and parsed execution data
+                const [taskResponse, parsedResponse] = await Promise.all([
+                    fetch(`/api/task/${currentExperiment.id}/${taskId}`),
+                    fetch(`/api/task/${currentExperiment.id}/${taskId}/parsed`)
+                ]);
+                
+                const taskData = await taskResponse.json();
+                const parsedData = await parsedResponse.json();
+                
+                displayTaskDetails(taskData);
+                displayExecutionSteps(parsedData);
+            } catch (error) {
+                console.error('Error loading task:', error);
+                hideLoading();
+                showNoSelection('Error loading task data');
+            }
+        }
+
+        function displayTaskDetails(taskData) {
+            const header = document.getElementById('task-header');
+            const title = document.getElementById('task-title');
+            const intent = document.getElementById('task-intent');
+            const meta = document.getElementById('task-meta');
+            const answerSection = document.getElementById('answer-section');
+            const answerValue = document.getElementById('answer-value');
+
+            // Show header
+            header.style.display = 'block';
+            
+            // Set title
+            title.textContent = `Task ${currentTask.id}`;
+            
+            // Set intent
+            intent.textContent = currentTask.intent;
+            
+            // Build meta information
+            const statusClass = currentTask.success ? 
+                (currentTask.score > 0.8 ? 'status-success' : 'status-partial') : 
+                'status-failed';
+                
+            const statusText = currentTask.success ? 
+                (currentTask.score > 0.8 ? 'Success' : 'Partial Success') : 
+                'Failed';
+            
+            meta.innerHTML = `
+                <div class="meta-item">
+                    <div class="meta-label">Status</div>
+                    <div class="meta-value ${statusClass}">${statusText}</div>
+                </div>
+                <div class="meta-item">
+                    <div class="meta-label">Score</div>
+                    <div class="meta-value">${currentTask.score.toFixed(2)}</div>
+                </div>
+                <div class="meta-item">
+                    <div class="meta-label">Execution Time</div>
+                    <div class="meta-value">${currentTask.elapsed_time.toFixed(1)}s</div>
+                </div>
+                <div class="meta-item">
+                    <div class="meta-label">Sites</div>
+                    <div class="meta-value">${currentTask.sites.join(', ')}</div>
+                </div>
+            `;
+            
+            // Extract and show expected answer
+            if (taskData.original_config && taskData.original_config.eval) {
+                const eval_data = taskData.original_config.eval;
+                let answer = '';
+                
+                if (eval_data.reference_answers) {
+                    if (eval_data.reference_answers.exact_match) {
+                        answer = eval_data.reference_answers.exact_match;
+                    } else if (eval_data.reference_answers.must_include && eval_data.reference_answers.must_include.length > 0) {
+                        answer = eval_data.reference_answers.must_include.join(', ');
+                    }
+                }
+                
+                if (answer) {
+                    answerSection.style.display = 'block';
+                    answerValue.textContent = answer;
+                } else {
+                    answerSection.style.display = 'none';
+                }
+            } else {
+                answerSection.style.display = 'none';
+            }
+        }
+
+        function displayExecutionSteps(parsedData) {
+            const stepsContainer = document.getElementById('execution-steps');
+            
+            if (parsedData.error) {
+                hideLoading();
+                showNoSelection(`Error: ${parsedData.error}`);
+                return;
+            }
+            
+            if (!parsedData.steps || parsedData.steps.length === 0) {
+                hideLoading();
+                showNoSelection('No execution steps found');
+                return;
+            }
+            
+            // Build HTML for all steps
+            let stepsHtml = '';
+            
+            parsedData.steps.forEach(step => {
+                stepsHtml += `
+                    <div class="step-item">
+                        <div class="step-header">
+                            Step ${step.step}
+                        </div>
+                        <div class="step-content">
+                            ${step.thinking ? `
+                                <div class="thinking-section">
+                                    <div class="thinking-label">🤔 AI Thinking</div>
+                                    <div class="thinking-content">${step.thinking}</div>
+                                </div>
+                            ` : ''}
+                            
+                            ${step.action ? `
+                                <div class="action-section">
+                                    <div class="action-label">⚡ Action Taken</div>
+                                    <div class="action-content">${step.action}</div>
+                                </div>
+                            ` : ''}
+                            
+                            ${step.screenshot ? `
+                                <div class="screenshot-section">
+                                    <div class="screenshot-label">📸 Page Screenshot</div>
+                                    <img src="${step.screenshot}" alt="Step ${step.step} screenshot" />
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            });
+            
+            stepsContainer.innerHTML = stepsHtml;
+            stepsContainer.style.display = 'block';
+            hideLoading();
+        }
+
+        function showLoading() {
+            document.getElementById('no-selection').style.display = 'none';
+            document.getElementById('loading').style.display = 'flex';
+            document.getElementById('execution-steps').style.display = 'none';
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        function showNoSelection(message = 'Select an experiment and task to view results') {
+            document.getElementById('no-selection').textContent = message;
+            document.getElementById('no-selection').style.display = 'flex';
+            document.getElementById('execution-steps').style.display = 'none';
+        }
+
+        function clearTaskDisplay() {
+            document.getElementById('task-header').style.display = 'none';
+            showNoSelection();
+        }
+    </script>
+</body>
+</html>
