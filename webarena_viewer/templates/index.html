@@ -19,29 +19,14 @@
             overflow: hidden;
         }
 
-        .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 1rem;
-            text-align: center;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            z-index: 1000;
-            position: relative;
-        }
-
-        .header h1 {
-            font-size: 1.5rem;
-            font-weight: 600;
-        }
-
         .main-container {
             display: flex;
-            height: calc(100vh - 80px);
+            height: 100vh;
         }
 
         /* Left Sidebar - Experiments */
         .sidebar {
-            width: 280px;
+            width: 220px;
             background: white;
             border-right: 1px solid #e0e0e0;
             overflow-y: auto;
@@ -303,18 +288,67 @@
             font-size: 0.9rem;
         }
 
+        .screenshot-section {
+            margin-bottom: 1.5rem;
+        }
+
         .screenshot-section img {
             max-width: 100%;
             height: auto;
-            border-radius: 4px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+            margin-bottom: 0.75rem;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .screenshot-section img:hover {
+            transform: scale(1.02);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.2);
         }
 
         .screenshot-label {
-            font-size: 0.8rem;
+            font-size: 0.85rem;
             font-weight: 600;
             color: #495057;
-            margin-bottom: 0.5rem;
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .screenshot-container {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .multiple-screenshots {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        .multiple-screenshots img {
+            width: 100%;
+        }
+
+        .step-content-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            align-items: start;
+        }
+
+        .step-left {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .step-right {
+            display: flex;
+            flex-direction: column;
         }
 
         .no-selection {
@@ -352,7 +386,7 @@
         /* Responsive Design */
         @media (max-width: 768px) {
             .sidebar {
-                width: 240px;
+                width: 200px;
             }
             
             .task-meta {
@@ -361,6 +395,15 @@
             
             .step-content {
                 padding: 0.75rem;
+            }
+            
+            .step-content-grid {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+            }
+            
+            .multiple-screenshots {
+                grid-template-columns: 1fr;
             }
             
             .thinking-content, .action-content {
@@ -388,10 +431,6 @@
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>🌐 WebArena Experiment Viewer</h1>
-    </div>
-
     <div class="main-container">
         <!-- Left Sidebar -->
         <div class="sidebar">
@@ -668,35 +707,94 @@
             let stepsHtml = '';
             
             parsedData.steps.forEach(step => {
-                stepsHtml += `
-                    <div class="step-item">
-                        <div class="step-header">
-                            Step ${step.step}
+                // Handle multiple screenshots
+                const screenshots = step.screenshots || (step.screenshot ? [step.screenshot] : []);
+                const hasScreenshots = screenshots.length > 0;
+                
+                let screenshotHtml = '';
+                if (hasScreenshots) {
+                    if (screenshots.length === 1) {
+                        screenshotHtml = `
+                            <div class="screenshot-section">
+                                <div class="screenshot-label">📸 Browser State</div>
+                                <div class="screenshot-container">
+                                    <img src="${screenshots[0]}" alt="Step ${step.step} screenshot" />
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        const screenshotImgs = screenshots.map((src, idx) => 
+                            `<img src="${src}" alt="Step ${step.step} screenshot ${idx + 1}" />`
+                        ).join('');
+                        
+                        screenshotHtml = `
+                            <div class="screenshot-section">
+                                <div class="screenshot-label">📸 Browser States (${screenshots.length})</div>
+                                <div class="screenshot-container ${screenshots.length > 1 ? 'multiple-screenshots' : ''}">
+                                    ${screenshotImgs}
+                                </div>
+                            </div>
+                        `;
+                    }
+                }
+                
+                // Reorganize layout: Screenshots first and more prominent, then thinking and action
+                if (hasScreenshots) {
+                    // Grid layout with screenshots on the right, thinking/action on the left
+                    stepsHtml += `
+                        <div class="step-item">
+                            <div class="step-header">
+                                Step ${step.step}
+                            </div>
+                            <div class="step-content">
+                                <div class="step-content-grid">
+                                    <div class="step-left">
+                                        ${step.thinking ? `
+                                            <div class="thinking-section">
+                                                <div class="thinking-label">🧠 AI Reasoning</div>
+                                                <div class="thinking-content">${step.thinking}</div>
+                                            </div>
+                                        ` : ''}
+                                        
+                                        ${step.action ? `
+                                            <div class="action-section">
+                                                <div class="action-label">⚡ Action Taken</div>
+                                                <div class="action-content">${step.action}</div>
+                                            </div>
+                                        ` : ''}
+                                    </div>
+                                    <div class="step-right">
+                                        ${screenshotHtml}
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div class="step-content">
-                            ${step.thinking ? `
-                                <div class="thinking-section">
-                                    <div class="thinking-label">🤔 AI Thinking</div>
-                                    <div class="thinking-content">${step.thinking}</div>
-                                </div>
-                            ` : ''}
-                            
-                            ${step.action ? `
-                                <div class="action-section">
-                                    <div class="action-label">⚡ Action Taken</div>
-                                    <div class="action-content">${step.action}</div>
-                                </div>
-                            ` : ''}
-                            
-                            ${step.screenshot ? `
-                                <div class="screenshot-section">
-                                    <div class="screenshot-label">📸 Page Screenshot</div>
-                                    <img src="${step.screenshot}" alt="Step ${step.step} screenshot" />
-                                </div>
-                            ` : ''}
+                    `;
+                } else {
+                    // No screenshots, use original layout
+                    stepsHtml += `
+                        <div class="step-item">
+                            <div class="step-header">
+                                Step ${step.step}
+                            </div>
+                            <div class="step-content">
+                                ${step.thinking ? `
+                                    <div class="thinking-section">
+                                        <div class="thinking-label">🧠 AI Reasoning</div>
+                                        <div class="thinking-content">${step.thinking}</div>
+                                    </div>
+                                ` : ''}
+                                
+                                ${step.action ? `
+                                    <div class="action-section">
+                                        <div class="action-label">⚡ Action Taken</div>
+                                        <div class="action-content">${step.action}</div>
+                                    </div>
+                                ` : ''}
+                            </div>
                         </div>
-                    </div>
-                `;
+                    `;
+                }
             });
             
             stepsContainer.innerHTML = stepsHtml;

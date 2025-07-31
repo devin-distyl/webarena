@@ -256,4 +256,174 @@ HOMEPAGE="http://localhost:4399"
 - **Virtual Environment**: `env/webarena-env/`
 - **Dependencies**: `requirements.txt`
 
-This system provides a robust, scalable platform for evaluating AI agents across realistic web tasks with proper isolation and comprehensive result tracking.
+## Frontend Visualization - WebArena Viewer
+
+The WebArena system includes a sophisticated web-based visualization interface for analyzing experiment results and agent execution traces.
+
+### Quick Start
+
+Launch the viewer with:
+```bash
+cd webarena_viewer
+./start_viewer.sh
+```
+
+Or manually:
+```bash
+cd webarena_viewer
+pip install -r requirements.txt
+python run_viewer.py
+```
+
+Access at: **http://localhost:8080**
+
+### Key Features
+
+1. **📊 Experiment Overview**: Browse all parallel execution results with success rates and performance metrics
+2. **🎯 Task Navigation**: Easy navigation between tasks within experiments (auto-selects task 0)
+3. **📝 Task Details**: Shows task intent, expected answers, and execution results
+4. **🧠 AI Thinking**: Displays the model's step-by-step reasoning process
+5. **⚡ Action Timeline**: Shows actions taken by the agent in chronological order
+6. **📸 Page Screenshots**: Visual browser states at each step
+7. **📈 Performance Metrics**: Shows execution times, scores, and success rates
+8. **🎨 Modern UI**: Clean, responsive interface with structured content display
+
+### User Interface Components
+
+#### Left Sidebar
+- **Experiment List**: All experiments sorted by date (newest first)
+- **Experiment Cards**: Show model name, timestamp, task count, and success rate
+- **Task Grid**: Numbered tiles showing all tasks in selected experiment
+
+#### Task Color Coding
+- 🟢 **Green**: Successful tasks (score > 0.8)
+- 🟡 **Yellow**: Partial success (score 0.3-0.8)  
+- 🔴 **Red**: Failed tasks (score < 0.3)
+
+#### Main Content Area
+- **Task Header**: Intent, status, score, execution time, target sites
+- **Expected Answer**: Reference answers from task configuration
+- **Execution Steps**: Step-by-step agent reasoning and actions
+- **Screenshots**: Visual page states captured during execution
+
+### Technical Architecture
+
+#### Backend (Flask Application)
+- **File**: `webarena_viewer/app.py` - Flask web server
+- **Port**: 8080 (configurable)
+- **Data Source**: `../parallel_demo_results/` directory
+- **Dependencies**: Flask, BeautifulSoup4, Werkzeug
+
+#### Frontend (Vanilla JavaScript)
+- **File**: `webarena_viewer/templates/index.html`
+- **Design**: Responsive, mobile-friendly interface
+- **Framework**: No external dependencies, pure vanilla JS
+- **Styling**: Modern CSS with gradient headers and structured layouts
+
+#### Data Processing
+The viewer intelligently parses experiment data:
+
+1. **Experiment Loading**: Scans `parallel_demo_results/` for timestamped experiment directories
+2. **Result Parsing**: Extracts data from `parallel_*_results.json` files  
+3. **HTML Analysis**: Parses `render_*.html` files to extract agent thinking, actions, and screenshots
+4. **Configuration Merging**: Combines task configs with original intent from `config_files/*.json`
+
+### API Endpoints
+
+The viewer exposes RESTful API endpoints:
+
+- `GET /api/experiments` - List all experiments with metadata
+- `GET /api/experiment/{id}` - Get specific experiment details  
+- `GET /api/task/{exp_id}/{task_id}` - Get task configuration and evaluation data
+- `GET /api/task/{exp_id}/{task_id}/parsed` - Get parsed execution steps with screenshots
+- `GET /render/{exp_id}/{task_id}` - Serve raw render HTML file
+
+### Step-by-Step Execution Analysis
+
+For each task, the viewer displays:
+
+1. **AI Thinking Section**:
+   - Model's internal reasoning process
+   - Decision-making steps
+   - Problem analysis approach
+
+2. **Action Timeline**:
+   - Chronological sequence of browser actions
+   - Action types: click, type, scroll, navigate
+   - Target elements and parameters
+
+3. **Visual Progress**:
+   - Screenshot at each major step
+   - Page state changes over time
+   - Browser viewport captures
+
+### Data Sources and File Structure
+
+The viewer reads from multiple data sources:
+
+```
+parallel_demo_results/
+└── 20250731_120820_openai_gpt_4_1_2025_04_14/
+    ├── parallel_demo_results.json     # Experiment summary
+    ├── task_78/
+    │   ├── config.json               # Runtime task configuration
+    │   ├── render_78.html           # Agent execution trace with screenshots
+    │   ├── traces/                  # Detailed execution logs
+    │   └── log_files.txt           # System execution logs
+    └── ...
+
+config_files/
+└── 78.json                         # Original task intent and evaluation criteria
+```
+
+### Navigation and Usage
+
+#### Automatic Features
+- **Auto-Selection**: Most recent experiment selected by default
+- **Task 0 Priority**: Automatically selects task 0 when switching experiments
+- **Real-time Loading**: Asynchronous loading with progress indicators
+
+#### Manual Navigation
+- **Experiment Selection**: Click any experiment in left sidebar
+- **Task Selection**: Click numbered tiles in task grid
+- **Step Navigation**: Scroll through execution timeline
+
+### Performance Considerations
+
+- **Lazy Loading**: Task details loaded only when selected
+- **HTML Parsing**: BeautifulSoup efficiently extracts execution data
+- **Screenshot Handling**: Base64 images embedded in render files
+- **Responsive Design**: Optimized for various screen sizes
+
+### Troubleshooting Viewer Issues
+
+#### No Experiments Showing
+- Ensure experiments exist: run `run_parallel.py` first
+- Check directory: `parallel_demo_results/` must exist and contain experiment folders
+- Verify permissions: viewer must have read access to results directory
+
+#### Render Files Not Loading  
+- Confirm `render_*.html` files exist in task directories
+- Check browser console for JavaScript errors
+- Verify file permissions and server access
+
+#### Performance Issues
+- Large HTML render files may cause slow loading
+- Use browser zoom controls for content size adjustment
+- Consider closing other browser tabs to free memory
+
+### Directory Structure
+
+```
+webarena_viewer/
+├── app.py                 # Flask backend application (385 lines)
+├── run_viewer.py          # Simple startup script
+├── start_viewer.sh        # Bash launcher with dependency checking  
+├── requirements.txt       # Python dependencies (Flask, BeautifulSoup4)
+├── distyl.ico            # Favicon for web interface
+├── templates/
+│   └── index.html        # Main web interface (728 lines)
+└── README.md             # Viewer documentation
+```
+
+This system provides a robust, scalable platform for evaluating AI agents across realistic web tasks with proper isolation, comprehensive result tracking, and intuitive visual analysis tools.

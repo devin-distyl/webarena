@@ -209,24 +209,61 @@ class ExperimentLoader:
                 action_div = predict_div.find('div', class_='parsed_action')
                 action = action_div.get_text(strip=True) if action_div else ""
                 
-                # Find associated screenshot (look for img tags near this action)
-                screenshot = None
-                # Look for img tags in the vicinity
+                # Find associated screenshots (look comprehensively for img tags)
+                screenshots = []
+                
+                # 1. Check within the predict_action div itself
+                imgs_within = predict_div.find_all('img')
+                for img in imgs_within:
+                    if img.get('src', '').startswith('data:image'):
+                        screenshots.append(img.get('src'))
+                
+                # 2. Check previous siblings (original logic, but collect all)
                 current = predict_div
-                for _ in range(10):  # Search nearby elements
+                for _ in range(15):  # Increased search range
                     current = current.find_previous_sibling()
                     if not current:
                         break
-                    img = current.find('img')
-                    if img and img.get('src', '').startswith('data:image'):
-                        screenshot = img.get('src')
+                    imgs = current.find_all('img')
+                    for img in imgs:
+                        if img.get('src', '').startswith('data:image'):
+                            src = img.get('src')
+                            if src not in screenshots:  # Avoid duplicates
+                                screenshots.append(src)
+                
+                # 3. Check following siblings as well
+                current = predict_div
+                for _ in range(10):  # Look ahead for screenshots
+                    current = current.find_next_sibling()
+                    if not current:
                         break
+                    imgs = current.find_all('img')
+                    for img in imgs:
+                        if img.get('src', '').startswith('data:image'):
+                            src = img.get('src')
+                            if src not in screenshots:  # Avoid duplicates
+                                screenshots.append(src)
+                
+                # 4. If no screenshots found yet, search more broadly in surrounding context
+                if not screenshots:
+                    # Look in parent containers
+                    parent = predict_div.parent
+                    if parent:
+                        all_imgs = parent.find_all('img')
+                        for img in all_imgs:
+                            if img.get('src', '').startswith('data:image'):
+                                src = img.get('src')
+                                if src not in screenshots:
+                                    screenshots.append(src)
+                                    if len(screenshots) >= 3:  # Limit to avoid too many
+                                        break
                 
                 steps.append({
                     'step': step_num,
                     'thinking': thinking,
                     'action': action,
-                    'screenshot': screenshot
+                    'screenshots': screenshots,
+                    'screenshot': screenshots[0] if screenshots else None  # Keep backward compatibility
                 })
             
             # Extract page title and URL if available
