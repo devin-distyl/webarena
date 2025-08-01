@@ -1,6 +1,16 @@
 # websites domain
 import os
+from pathlib import Path
 
+from dotenv import load_dotenv
+
+# Try to load from .env file first
+env_path = Path(__file__).parent.parent / ".env"
+if env_path.exists():
+    print(f"Loading environment variables from {env_path}")
+    load_dotenv(env_path)
+
+# Get environment variables (from .env if loaded, otherwise from system)
 REDDIT = os.environ.get("REDDIT", "")
 SHOPPING = os.environ.get("SHOPPING", "")
 SHOPPING_ADMIN = os.environ.get("SHOPPING_ADMIN", "")
