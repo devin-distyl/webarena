@@ -161,7 +161,35 @@ def construct_agent(args: argparse.Namespace) -> Agent:
     llm_config = lm_config.construct_llm_config(args)
 
     agent: Agent
-    if args.agent_type == "teacher_forcing":
+    
+    # Check if using Distyl-WebArena provider
+    if args.provider == "distyl":
+        try:
+            # Add current directory to Python path for distyl_webarena imports
+            import sys
+            import os
+            if os.getcwd() not in sys.path:
+                sys.path.insert(0, os.getcwd())
+                
+            # Import Distyl-WebArena components
+            from distyl_webarena.integration.webarena_adapter import create_distyl_agent_for_webarena
+            
+            # Create task config from args for Distyl agent
+            task_config = {
+                "task_id": getattr(args, 'test_start_idx', 0),
+                "sites": ["shopping_admin"],  # Default, will be updated by reset()
+                "intent": "WebArena task execution",
+                "provider": args.provider,
+                "model": args.model
+            }
+            
+            # Create Distyl agent that implements WebArena Agent interface
+            agent = create_distyl_agent_for_webarena(task_config, args.model)
+            
+        except ImportError as e:
+            raise ImportError(f"Distyl-WebArena not available: {e}. Please ensure distyl_webarena package is installed.")
+    
+    elif args.agent_type == "teacher_forcing":
         agent = TeacherForcingAgent()
     elif args.agent_type == "prompt":
         with open(args.instruction_path) as f:

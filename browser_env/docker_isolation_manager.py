@@ -487,10 +487,42 @@ class DockerIsolationManager:
                 'localhost:7780', f'localhost:{env.base_port + 10}'
             )
         
-        # Update auth state path
+        # Handle auth state path - copy auth files to isolated directory
         if original_config.get('storage_state'):
-            auth_filename = os.path.basename(original_config['storage_state'])
-            modified_config['storage_state'] = os.path.join(env.auth_dir, auth_filename)
+            original_auth = original_config['storage_state']
+            auth_filename = os.path.basename(original_auth)
+            isolated_auth_path = os.path.join(env.auth_dir, auth_filename)
+            
+            # Find the original auth file (try both absolute and relative paths)
+            auth_source = None
+            if os.path.exists(original_auth):
+                auth_source = original_auth
+            elif os.path.exists(f"./.auth/{auth_filename}"):
+                auth_source = f"./.auth/{auth_filename}"
+            elif os.path.exists(f".auth/{auth_filename}"):
+                auth_source = f".auth/{auth_filename}"
+            
+            if auth_source and os.path.exists(auth_source):
+                try:
+                    shutil.copy2(auth_source, isolated_auth_path)
+                    logger.info(f"Copied auth file for task {task_id}: {auth_source} -> {isolated_auth_path}")
+                    modified_config['storage_state'] = isolated_auth_path
+                except Exception as e:
+                    logger.warning(f"Failed to copy auth file for task {task_id}: {e}")
+                    # Fall back to original path
+                    modified_config['storage_state'] = original_auth
+            else:
+                logger.warning(f"Original auth file not found: {original_auth}, tried: {auth_source}")
+                # Try to use the default auth file path
+                default_auth = f"./.auth/{auth_filename}"
+                if os.path.exists(default_auth):
+                    try:
+                        shutil.copy2(default_auth, isolated_auth_path)
+                        logger.info(f"Used default auth file for task {task_id}: {default_auth} -> {isolated_auth_path}")
+                        modified_config['storage_state'] = isolated_auth_path
+                    except Exception as e:
+                        logger.warning(f"Failed to copy default auth file for task {task_id}: {e}")
+                        modified_config['storage_state'] = original_auth
         
         return modified_config
 

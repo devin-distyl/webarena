@@ -83,13 +83,13 @@ Please check out [this page](environment_docker/README.md) for details.
 
 2. Configurate the urls for each website.
 ```bash
-export SHOPPING="<your_shopping_site_domain>:7770"
-export SHOPPING_ADMIN="<your_e_commerce_cms_domain>:7780/admin"
-export REDDIT="<your_reddit_domain>:9999"
-export GITLAB="<your_gitlab_domain>:8023"
-export MAP="<your_map_domain>:3000"
-export WIKIPEDIA="<your_wikipedia_domain>:8888/wikipedia_en_all_maxi_2022-05/A/User:The_other_Kiwix_guy/Landing"
-export HOMEPAGE="<your_homepage_domain>:4399" # this is a placeholder
+export SHOPPING="http://localhost:7770"
+export SHOPPING_ADMIN="http://localhost:7780/admin"
+export REDDIT="http://localhost:9999"
+export GITLAB="http://localhost:8023"
+export MAP="http://localhost:3000"
+export WIKIPEDIA="http://localhost:8888/wikipedia_en_all_maxi_2022-05/A/User:The_other_Kiwix_guy/Landing"
+export HOMEPAGE="http://localhost:4399" # this is a placeholder
 ```
 
 > You are encouraged to update the environment variables in [github workflow](.github/workflows/tests.yml#L7) to ensure the correctness of unit tests
