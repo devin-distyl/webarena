@@ -12,3 +12,4 @@ nltk
 text-generation
 transformers==4.33.2
 python-dotenv
+bs4
