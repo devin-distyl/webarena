@@ -108,7 +108,7 @@ Compared to simple reactive agents, Distyl-WebArena provides:
 - Supports all WebArena action formats
 
 ### Parallel Execution
-- Full integration with `run_parallel.py`
+- Full integration with `run_parallel_distyl.py`
 - Docker isolation compatibility
 - Automatic resource management
 - Comprehensive result tracking

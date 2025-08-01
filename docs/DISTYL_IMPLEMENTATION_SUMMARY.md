@@ -85,7 +85,7 @@ DistylWebArenaController → WebStepPlanner → WebExecutor → AccessibilityTre
 
 ### Integration & Utilities
 - ✅ **WebArenaAdapter** (`integration/webarena_adapter.py`) - Compatibility layer
-- ✅ **ParallelIntegration** (`integration/parallel_integration.py`) - run_parallel.py support
+- ✅ **ParallelIntegration** (`integration/parallel_integration.py`) - run_parallel_distyl.py support
 - ✅ **DistylLogger** (`utils/logging.py`) - Comprehensive logging
 - ✅ **WebUtils** (`utils/web_utils.py`) - Web-specific utilities
 
@@ -188,7 +188,7 @@ agent = create_distyl_agent_for_webarena(task_config)
 3. **Intelligent Capabilities**: Hierarchical planning, semantic grounding, memory-driven learning
 4. **Site Optimization**: Specialized knowledge for all WebArena sites
 5. **Error Recovery**: Sophisticated reflection and alternative generation
-6. **Parallel Execution**: Seamless integration with run_parallel.py system
+6. **Parallel Execution**: Seamless integration with run_parallel_distyl.py system
 
 ## 🔮 Future Extensions
 

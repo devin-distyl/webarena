@@ -341,7 +341,7 @@ Distyl-WebArena maintains full compatibility with the existing WebArena infrastr
 
 **File**: `distyl_webarena/integration/parallel_integration.py`
 
-Provides seamless integration with `run_parallel.py`:
+Provides seamless integration with `run_parallel_distyl.py`:
 
 ```bash
 # Create enhanced run_parallel that supports Distyl-WebArena
@@ -563,7 +563,7 @@ distyl_webarena/
 ├── integration/                   # WebArena system integration
 │   ├── __init__.py
 │   ├── webarena_adapter.py       # WebArenaAdapter (compatibility layer)
-│   └── parallel_integration.py   # ParallelIntegration (run_parallel.py integration)
+│   └── parallel_integration.py   # ParallelIntegration (run_parallel_distyl.py integration)
 ├── utils/                         # Utilities and helper functions
 │   ├── __init__.py
 │   ├── logging.py                # DistylLogger (logging system)
@@ -680,7 +680,7 @@ def create_distyl_agent_for_webarena(task_config: Dict[str, Any],
     """Create Distyl agent compatible with browser_env/run.py"""
 
 def get_distyl_model_info() -> Dict[str, Any]:
-    """Get model information for run_parallel.py integration"""
+    """Get model information for run_parallel_distyl.py integration"""
 ```
 
 ## Conclusion

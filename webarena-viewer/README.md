@@ -80,7 +80,7 @@ The viewer reads experiment data from:
 ## Troubleshooting
 
 ### No Experiments Showing
-- Ensure you have run some experiments using `run_parallel.py`
+- Ensure you have run some experiments using `run_parallel_distyl.py`
 - Check that `parallel_demo_results/` directory exists and contains experiment folders
 
 ### Render Files Not Loading

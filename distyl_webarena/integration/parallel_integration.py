@@ -1,7 +1,7 @@
 """
-Parallel Integration: Enhanced run_parallel.py integration for Distyl-WebArena
+Parallel Integration: Enhanced run_parallel_distyl.py integration for Distyl-WebArena
 
-Provides integration utilities to modify and extend the existing run_parallel.py
+Provides integration utilities to modify and extend the existing run_parallel_distyl.py
 system to support Distyl-WebArena agent execution.
 """
 
@@ -15,7 +15,7 @@ from .webarena_adapter import WebArenaAdapter, get_distyl_model_info
 
 class ParallelIntegration:
     """
-    Integration utilities for Distyl-WebArena with run_parallel.py
+    Integration utilities for Distyl-WebArena with run_parallel_distyl.py
     """
     
     def __init__(self, webarena_root: str = None):
@@ -25,12 +25,12 @@ class ParallelIntegration:
         else:
             self.webarena_root = webarena_root
         
-        self.run_parallel_path = os.path.join(self.webarena_root, "run_parallel.py")
+        self.run_parallel_path = os.path.join(self.webarena_root, "run_parallel_distyl.py")
         self.browser_env_path = os.path.join(self.webarena_root, "browser_env", "run.py")
     
     def create_distyl_run_parallel(self, output_path: str = None) -> str:
         """
-        Create a modified run_parallel.py that supports Distyl-WebArena
+        Create a modified run_parallel_distyl.py that supports Distyl-WebArena
         
         Args:
             output_path: Where to save the modified file (default: run_parallel_distyl.py)
@@ -42,9 +42,9 @@ class ParallelIntegration:
         if output_path is None:
             output_path = os.path.join(self.webarena_root, "run_parallel_distyl.py")
         
-        # Read the original run_parallel.py
+        # Read the original run_parallel_distyl.py
         if not os.path.exists(self.run_parallel_path):
-            raise FileNotFoundError(f"Original run_parallel.py not found at {self.run_parallel_path}")
+            raise FileNotFoundError(f"Original run_parallel_distyl.py not found at {self.run_parallel_path}")
         
         with open(self.run_parallel_path, 'r') as f:
             original_content = f.read()
@@ -63,7 +63,7 @@ class ParallelIntegration:
         return output_path
     
     def _modify_run_parallel_content(self, content: str) -> str:
-        """Modify run_parallel.py content to support Distyl-WebArena"""
+        """Modify run_parallel_distyl.py content to support Distyl-WebArena"""
         
         # Add Distyl-WebArena imports at the top
         distyl_imports = '''

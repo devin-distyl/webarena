@@ -8,7 +8,7 @@ WebArena is a realistic web environment for building autonomous agents, featurin
 
 ### Key Components
 
-1. **Main Execution Script**: `run_parallel.py` - Orchestrates parallel task execution
+1. **Main Execution Script**: `run_parallel_distyl.py` - Orchestrates parallel task execution
 2. **Browser Environment**: `browser_env/run.py` - Core agent execution environment  
 3. **Docker Isolation**: `browser_env/docker_isolation_manager.py` - Manages isolated container environments
 4. **Agent System**: `agent/agent.py` - AI agent implementations
@@ -16,45 +16,36 @@ WebArena is a realistic web environment for building autonomous agents, featurin
 
 ## Running Parallel Tasks
 
-### Enhanced Runner: `run_parallel_distyl.py`
+### Unified Parallel Runner: `run_parallel_distyl.py`
 
-**For Distyl-WebArena and all standard models:**
+**The single parallel runner that supports ALL models - both Distyl-WebArena and standard models:**
 ```bash
 python run_parallel_distyl.py --model <model_name> --tasks <task_ids>
 ```
 
-### Original Runner: `run_parallel.py`
-
-**For standard WebArena models only:**
-```bash
-python run_parallel.py --model <model_name> --provider <provider> --tasks <task_ids>
-```
+**Key features:**
+- Supports both Distyl-WebArena AND all standard models (OpenAI, Google, Anthropic)
+- Auto-detects provider from model name (no need for `--provider` flag)
+- Graceful fallback if Distyl-WebArena is not available
+- Docker isolation and authentication features
+- Comprehensive result format and structure
 
 ### Examples
 
-**With Enhanced Runner (Recommended):**
 ```bash
-# Distyl-WebArena (intelligent agent)
+# Distyl-WebArena (intelligent agent with hierarchical planning)
 python run_parallel_distyl.py --model distyl-webarena --tasks 78
 
-# Standard models (auto-detects provider)
+# Standard models (auto-detects provider - no --provider flag needed)
 python run_parallel_distyl.py --model gpt-4 --tasks 78,79,80
+python run_parallel_distyl.py --model gpt-4.1-2025-04-14 --tasks 78-82
 python run_parallel_distyl.py --model gemini-1.5-pro --tasks 78-82
+
+# Multiple tasks and task ranges
+python run_parallel_distyl.py --model gpt-4 --tasks 78,79,80,85-90
 
 # List available models
 python run_parallel_distyl.py --list-models
-```
-
-**With Original Runner:**
-```bash
-# Single task
-python run_parallel.py --model gpt-4.1-2025-04-14 --provider openai --tasks 78
-
-# Multiple tasks (comma-separated)
-python run_parallel.py --model gpt-4.1-2025-04-14 --provider openai --tasks 78,79,80
-
-# Task range
-python run_parallel.py --model gpt-4.1-2025-04-14 --provider openai --tasks 78-82
 ```
 
 ### Supported Providers & Models
@@ -72,7 +63,7 @@ python run_parallel.py --model gpt-4.1-2025-04-14 --provider openai --tasks 78-8
 
 ### 1. Parallel Execution Flow
 
-When you run `run_parallel.py`:
+When you run `run_parallel_distyl.py`:
 
 1. **Setup Phase**: 
    - Loads environment variables from `.env` file if present
@@ -269,7 +260,7 @@ HOMEPAGE="http://localhost:4399"
 
 ## File Locations Summary
 
-- **Main Scripts**: `run_parallel.py`, `browser_env/run.py`
+- **Main Scripts**: `run_parallel_distyl.py`, `browser_env/run.py`
 - **Agent Code**: `agent/agent.py`, `agent/prompts/`
 - **Docker Management**: `browser_env/docker_isolation_manager.py`
 - **Task Configs**: `config_files/*.json` (812 files)
@@ -420,7 +411,7 @@ config_files/
 ### Troubleshooting Viewer Issues
 
 #### No Experiments Showing
-- Ensure experiments exist: run `run_parallel.py` first
+- Ensure experiments exist: run `run_parallel_distyl.py` first
 - Check directory: `parallel_demo_results/` must exist and contain experiment folders
 - Verify permissions: viewer must have read access to results directory
 

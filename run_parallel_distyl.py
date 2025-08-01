@@ -2,7 +2,7 @@
 """
 Distyl-WebArena Parallel Runner
 
-Enhanced version of run_parallel.py with Distyl-WebArena agent support.
+Universal WebArena parallel runner supporting both Distyl-WebArena and standard models.
 Maintains full compatibility with the original while adding intelligent agent capabilities.
 """
 
@@ -478,15 +478,74 @@ def save_results(results: List[Dict[str, Any]], model_name: str, provider: str):
     
     return results_dir
 
+def ensure_authentication_files(task_ids):
+    """Ensure authentication files exist for all required sites"""
+    print("🔑 Checking authentication files...")
+    
+    # Collect all unique sites needed across tasks
+    required_sites = set()
+    for task_id in task_ids:
+        try:
+            config_path = f"config_files/{task_id}.json"
+            with open(config_path, 'r') as f:
+                config = json.load(f)
+            sites = config.get('sites', [])
+            required_sites.update(sites)
+        except Exception as e:
+            print(f"   Warning: Could not load config for task {task_id}: {e}")
+    
+    if not required_sites:
+        print("   No sites require authentication")
+        return
+        
+    print(f"   Required sites: {', '.join(sorted(required_sites))}")
+    
+    # Ensure .auth directory exists
+    from pathlib import Path
+    auth_dir = Path(".auth")
+    auth_dir.mkdir(exist_ok=True)
+    
+    # Check if we need to run auto_login
+    missing_auth = False
+    for site in required_sites:
+        auth_file = auth_dir / f"{site}_state.json"
+        if not auth_file.exists():
+            missing_auth = True
+            print(f"   Missing: {auth_file}")
+    
+    if missing_auth:
+        print("   Running auto_login to generate authentication files...")
+        try:
+            result = subprocess.run([
+                "python", "browser_env/auto_login.py", 
+                "--auth_folder", str(auth_dir)
+            ], capture_output=True, text=True, timeout=300)
+            
+            if result.returncode == 0:
+                print("   ✅ Authentication files generated successfully")
+            else:
+                print(f"   ⚠️  Auto-login completed with warnings: {result.stderr}")
+        except subprocess.TimeoutExpired:
+            print("   ⚠️  Auto-login timed out, but continuing...")
+        except Exception as e:
+            print(f"   ⚠️  Auto-login failed: {e}, but continuing...")
+    else:
+        print("   ✅ All authentication files already exist")
+
 def main():
     """Main execution function"""
     
     parser = argparse.ArgumentParser(description="Distyl-WebArena Parallel Runner")
-    parser.add_argument("--model", help="Model name (e.g., distyl-webarena, gpt-4)")
-    parser.add_argument("--provider", help="Provider name (auto-detected from model if not specified)")
-    parser.add_argument("--tasks", help="Task IDs (e.g., 78 or 78,79,80 or 78-82)")
-    parser.add_argument("--max_workers", type=int, default=4, help="Maximum parallel workers")
-    parser.add_argument("--list-models", action="store_true", help="List available models")
+    parser.add_argument("--model", "-m", type=str, default="distyl-webarena",
+                        help="Model name (e.g., distyl-webarena, gpt-4) (default: distyl-webarena)")
+    parser.add_argument("--provider", "-p", type=str, default=None,
+                        help="Provider name (auto-detected from model if not specified)")
+    parser.add_argument("--tasks", "-t", type=str, default="0",
+                        help="Task IDs (e.g., 78 or 78,79,80 or 78-82) (default: 0)")
+    parser.add_argument("--max-workers", "-w", type=int, default=4,
+                        help="Maximum parallel workers (default: 4)")
+    parser.add_argument("--list-models", action="store_true",
+                        help="List available models and exit")
     
     args = parser.parse_args()
     
@@ -501,18 +560,7 @@ def main():
             print(f"Distyl-WebArena: {distyl_info['model_name']}")
             print(f"  Features: {', '.join(distyl_info['features'])}")
         print("Standard WebArena models: gpt-4, gpt-3.5-turbo, gemini-1.5-pro, etc.")
-        return
-    
-    # Validate required arguments
-    if not args.model:
-        print("Error: --model argument is required")
-        print("Use --help for usage information")
-        sys.exit(1)
-    
-    if not args.tasks:
-        print("Error: --tasks argument is required")
-        print("Use --help for usage information")
-        sys.exit(1)
+        return 0
     
     # Validate environment
     validate_environment()
@@ -528,16 +576,19 @@ def main():
     # Parse tasks
     try:
         task_ids = parse_task_list(args.tasks)
+        if not task_ids:
+            print("❌ No valid task IDs provided")
+            return 1
     except ValueError as e:
-        print(f"Error parsing tasks: {e}")
-        sys.exit(1)
+        print(f"❌ Error parsing task IDs: {e}")
+        return 1
     
-    print(f"Distyl-WebArena Parallel Runner")
-    print(f"==============================")
-    print(f"Model: {args.model}")
-    print(f"Provider: {provider}")
-    print(f"Tasks: {task_ids}")
-    print(f"Max Workers: {args.max_workers}")
+    print(f"🎯 Configuration:")
+    print(f"   Model: {args.model}")
+    print(f"   Provider: {provider} {'(auto-detected)' if not args.provider else ''}")
+    print(f"   Tasks: {task_ids}")
+    print(f"   Max workers: {args.max_workers}")
+    print()
     
     if provider == "distyl":
         available, _ = check_distyl_availability()
@@ -545,6 +596,10 @@ def main():
             print(f"Using Distyl-WebArena with hierarchical planning and reflection")
         else:
             print(f"Using standard execution (Distyl-WebArena not available)")
+    
+    # Ensure authentication files exist before starting
+    print()
+    ensure_authentication_files(task_ids)
     
     print("\nStarting parallel execution...")
     
@@ -588,6 +643,18 @@ def main():
     
     print(f"\nExecution completed in {total_time:.2f}s")
     print(f"Results directory: {results_dir}")
+    print(f"\n✅ Parallel execution demo completed successfully!")
+    
+    return 0
 
 if __name__ == "__main__":
-    main()
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        print("\n\n⚠️  Demo interrupted by user")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\n💥 Demo failed: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)

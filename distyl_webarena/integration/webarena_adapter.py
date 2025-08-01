@@ -2,7 +2,7 @@
 WebArenaAdapter: Integration with existing WebArena parallel execution system
 
 Provides seamless integration between Distyl-WebArena agent and the existing
-run_parallel.py system while maintaining full compatibility.
+run_parallel_distyl.py system while maintaining full compatibility.
 """
 
 import json
@@ -162,7 +162,7 @@ class WebArenaAdapter:
         Perform cleanup after parallel execution
         
         Args:
-            results: Execution results from run_parallel.py
+            results: Execution results from run_parallel_distyl.py
         """
         
         try:
@@ -234,9 +234,9 @@ def create_distyl_agent_for_webarena(task_config: Dict[str, Any],
 
 def get_distyl_model_info() -> Dict[str, Any]:
     """
-    Get model information for integration with run_parallel.py
+    Get model information for integration with run_parallel_distyl.py
     
-    This allows run_parallel.py to recognize and use Distyl-WebArena as a model option
+    This allows run_parallel_distyl.py to recognize and use Distyl-WebArena as a model option
     """
     
     return {
