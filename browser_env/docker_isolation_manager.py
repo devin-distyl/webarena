@@ -92,7 +92,7 @@ class DockerIsolationManager:
     }
 
     def __init__(
-        self, base_port_start: int = 10000, port_range_size: int = 100
+        self, base_port_start: int = 10000, port_range_size: int = 100, max_concurrent_tasks: int = 500
     ):
         """
         Initialize the Docker isolation manager
@@ -100,15 +100,40 @@ class DockerIsolationManager:
         Args:
             base_port_start: Starting port for task isolation (default: 10000)
             port_range_size: Port range allocated per task (default: 100)
+            max_concurrent_tasks: Maximum concurrent tasks supported (default: 500)
         """
         self.base_port_start = base_port_start
         self.port_range_size = port_range_size
+        self.max_concurrent_tasks = max_concurrent_tasks
         self.active_environments: Dict[int, TaskEnvironment] = {}
         self.lock = threading.Lock()
 
     def allocate_ports(self, task_id: int) -> int:
-        """Allocate a unique port range for a task"""
-        return self.base_port_start + (task_id * self.port_range_size)
+        """
+        Allocate a unique port range for a task.
+        Uses modulo-based allocation to stay within Docker's valid port range (1-65535).
+        
+        Args:
+            task_id: Task identifier
+            
+        Returns:
+            Base port for the task's port range
+        """
+        # Use modulo to map task_id to a smaller range that fits within Docker limits
+        # This supports up to max_concurrent_tasks unique port ranges
+        normalized_task_id = task_id % self.max_concurrent_tasks
+        allocated_port = self.base_port_start + (normalized_task_id * self.port_range_size)
+        
+        # Ensure we don't exceed Docker's port limit (65535)
+        max_port = allocated_port + self.port_range_size - 1
+        if max_port > 65535:
+            raise ValueError(
+                f"Port allocation for task {task_id} would exceed Docker's port limit. "
+                f"Allocated range: {allocated_port}-{max_port}, max allowed: 65535. "
+                f"Consider reducing base_port_start, port_range_size, or max_concurrent_tasks."
+            )
+        
+        return allocated_port
 
     def create_isolated_auth(self, task_id: int, original_config: Dict) -> str:
         """Create isolated authentication directory for a task"""
