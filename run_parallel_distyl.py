@@ -74,6 +74,57 @@ def check_distyl_availability():
         return False, None
 
 
+def copy_distyl_logs_to_results(task_id: int, result_dir: str) -> Dict[str, str]:
+    """
+    Copy Distyl log files to the task result directory
+    
+    Args:
+        task_id: Task identifier
+        result_dir: Directory where task results are stored
+        
+    Returns:
+        Dict with log file paths that were copied
+    """
+    import glob
+    
+    copied_logs = {}
+    
+    try:
+        # Look for Distyl log files for this task
+        log_pattern = f"distyl_logs/distyl_webarena_*_task_{task_id}.log"
+        matching_logs = glob.glob(log_pattern)
+        
+        # Also look for general Distyl logs from around the same time
+        if not matching_logs:
+            # Get all recent Distyl logs and find ones that might be for this task
+            all_distyl_logs = glob.glob("distyl_logs/distyl_webarena_*.log")
+            # Sort by modification time and take the most recent ones
+            all_distyl_logs.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+            matching_logs = all_distyl_logs[:2]  # Take the 2 most recent logs
+        
+        for log_file in matching_logs:
+            if os.path.exists(log_file):
+                # Copy to result directory
+                log_filename = os.path.basename(log_file)
+                dest_path = os.path.join(result_dir, f"distyl_{log_filename}")
+                
+                import shutil
+                shutil.copy2(log_file, dest_path)
+                copied_logs[log_filename] = dest_path
+                
+        # Also create a distyl_logs.txt file similar to log_files.txt
+        if copied_logs:
+            distyl_log_list_path = os.path.join(result_dir, "distyl_logs.txt")
+            with open(distyl_log_list_path, "w") as f:
+                for log_filename in copied_logs.keys():
+                    f.write(f"distyl_logs/{log_filename}\n")
+                    
+    except Exception as e:
+        print(f"Warning: Failed to copy Distyl logs for task {task_id}: {e}")
+    
+    return copied_logs
+
+
 def parse_evaluation_results(
     stdout: str, stderr: str
 ) -> Tuple[float, bool, str]:
@@ -159,9 +210,34 @@ def validate_environment():
         print("Warning: HOMEPAGE environment variable not set")
 
     if missing_urls:
+        # Try to load from .env file if variables are missing
+        env_file_path = ".env"
+        if os.path.exists(env_file_path):
+            print(f"Loading environment variables from {env_file_path}")
+            try:
+                from dotenv import load_dotenv
+                load_dotenv(env_file_path)
+                
+                # Re-check after loading .env
+                still_missing = []
+                for url_name in missing_urls:
+                    if not os.getenv(url_name):
+                        still_missing.append(url_name)
+                
+                if not still_missing:
+                    print("✅ All required environment variables loaded from .env file")
+                    return
+                else:
+                    missing_urls = still_missing
+                    
+            except ImportError:
+                print("Warning: python-dotenv not installed. Install with: pip install python-dotenv")
+            except Exception as e:
+                print(f"Warning: Failed to load .env file: {e}")
+        
         raise EnvironmentError(
             f"Required environment variables not set: {', '.join(missing_urls)}\n"
-            f"Please export these variables:\n"
+            f"Please export these variables or ensure they are in your .env file:\n"
             f'export SHOPPING="<your_shopping_site_domain>:7770"\n'
             f'export SHOPPING_ADMIN="<your_e_commerce_cms_domain>:7780/admin"\n'
             f'export REDDIT="<your_reddit_domain>:9999"\n'
@@ -266,6 +342,7 @@ def run_task_with_distyl(
             model_name,
             "--result_dir",
             temp_result_dir,
+            "--save_trace_enabled",
         ]
 
         start_time = time.time()
@@ -273,11 +350,20 @@ def run_task_with_distyl(
             cmd, capture_output=True, text=True, env=env, timeout=600
         )
         execution_time = time.time() - start_time
+        
+        # Debug: Print subprocess output to see our debug messages
+        print(f"🔥 SUBPROCESS STDOUT for task {task_id}:")
+        print(result.stdout)
+        print(f"🔥 SUBPROCESS STDERR for task {task_id}:")
+        print(result.stderr)
 
         # Parse evaluation results from output
         score, task_success, eval_type = parse_evaluation_results(
             result.stdout, result.stderr
         )
+
+        # Copy Distyl log files to result directory if they exist
+        distyl_log_info = copy_distyl_logs_to_results(task_id, temp_result_dir)
 
         return {
             "task_id": task_id,
@@ -413,6 +499,7 @@ def run_task_standard(
             model_name,
             "--result_dir",
             temp_result_dir,
+            "--save_trace_enabled",
         ]
 
         start_time = time.time()

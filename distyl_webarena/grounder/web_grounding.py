@@ -162,7 +162,7 @@ class AccessibilityTreeGrounder:
         self.semantic_matcher = SemanticElementMatcher(engine_params)
         self.multimodal_grounder = MultimodalGrounder(engine_params)
         self.element_detector = ElementAutoDetector(self)
-        self.logger = DistylLogger("AccessibilityTreeGrounder")
+        self.logger = DistylLogger("AccessibilityTreeGrounder", log_level="DEBUG")
         
         # Performance tracking
         self.grounding_feedback = {}
@@ -229,29 +229,41 @@ class AccessibilityTreeGrounder:
         Output: "click [123]" (where 123 is the actual element ID)
         """
         
+        self.logger.debug(f"🔧 RESOLVE_ACTION_PARAMETERS: Input template: {action_template}")
+        
         # Find all parameter placeholders
         parameters = re.findall(r'\[([^\]]+)\]', action_template)
+        self.logger.debug(f"🎯 Found parameters to resolve: {parameters}")
         
         resolved_action = action_template
         for param in parameters:
             if param.isdigit():
                 # Already an element ID, no resolution needed
+                self.logger.debug(f"✅ Parameter '{param}' is already an element ID")
                 continue
+            
+            self.logger.debug(f"🔍 Resolving parameter: {param}")
             
             # Check if it's an auto-detect parameter
             if param.startswith("auto_detect_"):
+                self.logger.debug(f"🤖 Using auto-detect for: {param}")
                 element_id = self.element_detector.resolve_auto_detect_element(param, observation)
             else:
                 # Ground the parameter description
-                element_id = self.ground_element_description(param.replace('_', ' '), observation)
+                description = param.replace('_', ' ')
+                self.logger.debug(f"📝 Grounding description: '{description}'")
+                element_id = self.ground_element_description(description, observation)
             
             if element_id:
+                self.logger.debug(f"✅ Resolved '{param}' to element ID: {element_id}")
                 resolved_action = resolved_action.replace(f'[{param}]', f'[{element_id}]')
             else:
                 # Could not resolve - mark as failed
-                self.logger.error(f"Could not resolve parameter: {param}")
+                self.logger.error(f"❌ Could not resolve parameter: {param}")
+                self.logger.debug(f"🔍 Available accessibility tree: {observation.get('accessibility_tree', observation.get('text', ''))[:200]}...")
                 return f"none  # Could not resolve {param}"
         
+        self.logger.debug(f"🎯 Final resolved action: {resolved_action}")
         return resolved_action
     
     def find_element_by_keywords(self, keywords: List[str], observation: Dict[str, Any]) -> str:

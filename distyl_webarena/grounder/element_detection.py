@@ -59,7 +59,17 @@ class ElementAutoDetector:
             "home_link": ["home", "homepage", "main"],
             "profile_link": ["profile", "account", "user"],
             "settings_link": ["settings", "preferences", "config"],
-            "logout_link": ["logout", "sign out", "exit"]
+            "logout_link": ["logout", "sign out", "exit"],
+            "reports_link": ["reports", "report"],
+            "dashboard_link": ["dashboard", "home"],
+            "sales_link": ["sales", "orders"],
+            "sales_reports_link": ["sales reports", "sales report", "sales", "reports"],
+            "catalog_link": ["catalog", "products"],
+            "customers_link": ["customers", "users"],
+            "marketing_link": ["marketing", "campaigns"],
+            "content_link": ["content", "cms"],
+            "stores_link": ["stores", "store"],
+            "system_link": ["system", "admin"]
         }
         
         if clean_element_type in element_patterns:

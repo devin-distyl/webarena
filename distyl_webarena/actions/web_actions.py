@@ -157,7 +157,7 @@ class WebActionCodeGenerator:
     
     def __init__(self, element_detector=None):
         self.element_detector = element_detector
-        self.logger = DistylLogger("WebActionCodeGenerator")
+        self.logger = DistylLogger("WebActionCodeGenerator", log_level="DEBUG")
     
     def generate_action_code(self, description: str, context: Dict[str, Any]) -> str:
         """
@@ -167,11 +167,13 @@ class WebActionCodeGenerator:
         Output: "click [123]" (where 123 is the actual element ID)
         """
         
+        self.logger.debug(f"🎬 GENERATE_ACTION_CODE: Input description: '{description}'")
         description = description.lower().strip()
         
         try:
             # Action pattern matching
             if "click" in description:
+                self.logger.debug(f"🖱️  Detected CLICK action in: {description}")
                 element_type = self._extract_element_type(description)
                 if self.element_detector:
                     element_id = self.element_detector.resolve_auto_detect_element(f"auto_detect_{element_type}", context)
@@ -197,7 +199,18 @@ class WebActionCodeGenerator:
             
             elif "navigate" in description or "go to" in description:
                 url = self._extract_url(description)
-                return f"goto [{url}]" if url else "goto [auto_detect_url]"
+                
+                # If we have a specific URL, use goto
+                if url:
+                    return f"goto [{url}]"
+                else:
+                    # For navigation to sections/pages, use click instead of goto
+                    element_type = self._extract_element_type(description)
+                    if self.element_detector:
+                        element_id = self.element_detector.resolve_auto_detect_element(f"auto_detect_{element_type}", context)
+                        return f"click [{element_id}]" if element_id else f"click [auto_detect_{element_type}]"
+                    else:
+                        return f"click [auto_detect_{element_type}]"
             
             elif "press" in description:
                 keys = self._extract_key_combination(description)
@@ -207,11 +220,11 @@ class WebActionCodeGenerator:
                 return "stop [Task completed]"
             
             else:
-                self.logger.warning(f"Could not parse description: {description}")
+                self.logger.warning(f"❓ Could not parse description - no matching patterns: {description}")
                 return "none"
                 
         except Exception as e:
-            self.logger.error(f"Error generating action code for '{description}': {e}")
+            self.logger.error(f"💥 Error generating action code for '{description}': {e}")
             return "none"
     
     def _extract_element_type(self, description: str) -> str:
@@ -242,7 +255,19 @@ class WebActionCodeGenerator:
             "home": "home_link",
             "profile": "profile_link",
             "settings": "settings_link",
-            "logout": "logout_link"
+            "logout": "logout_link",
+            "reports": "reports_link",
+            "reports section": "reports_link",
+            "dashboard": "dashboard_link",
+            "sales": "sales_link",
+            "sales reports": "sales_reports_link",
+            "access sales reports": "sales_reports_link",
+            "catalog": "catalog_link",
+            "customers": "customers_link",
+            "marketing": "marketing_link",
+            "content": "content_link",
+            "stores": "stores_link",
+            "system": "system_link"
         }
         
         for phrase, element_type in element_mappings.items():

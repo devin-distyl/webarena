@@ -25,7 +25,7 @@ class WebExecutor:
         self.action_generator = WebActionCodeGenerator(grounder.element_detector if grounder else None)
         self.reflection_agent = WebReflectionAgent(engine_params) if enable_reflection else None
         self.validator = ActionValidator()
-        self.logger = DistylLogger("WebExecutor")
+        self.logger = DistylLogger("WebExecutor", log_level="DEBUG")
         
         # Execution state
         self.current_subtask = None
@@ -72,6 +72,8 @@ class WebExecutor:
             # Check if subtask should be marked complete
             subtask_complete = self._should_complete_subtask(subtask, grounded_action, context)
             
+            self.logger.debug(f"🏁 Subtask completion check - Action: '{grounded_action}', Complete: {subtask_complete}, Type: {subtask.get('type', 'unknown')}")
+            
             return {
                 "subtask_complete": subtask_complete,
                 "action_valid": True
@@ -100,26 +102,33 @@ class WebExecutor:
     
     def _generate_web_action_plan(self, subtask: Dict[str, Any], context: Dict[str, Any], experience: str) -> str:
         """Generate detailed action plan for subtask"""
+
+        self.logger.debug(f"🎯 GENERATE_WEB_ACTION_PLAN: Starting for subtask: {subtask.get('description', '')}")
         
         subtask_description = subtask.get("description", "")
         subtask_type = subtask.get("type", "general")
         site_type = subtask.get("site_type", "general")
         
+        self.logger.debug(f"📋 Subtask details - Type: {subtask_type}, Site: {site_type}")
+        
         # Use action generator to create web action
         action_plan = self.action_generator.generate_action_code(subtask_description, context)
         
+        self.logger.debug(f"⚡ Primary action generator output: {action_plan}")
+        
         if action_plan == "none":
+            self.logger.warning(f"🚨 Action generator failed, using fallback for: {subtask_description}")
             # Try alternative generation strategies
             action_plan = self._generate_fallback_action(subtask_description, context, site_type)
+            self.logger.debug(f"🔄 Fallback action generated: {action_plan}")
         
-        self.logger.debug(f"Generated action plan: {action_plan}")
+        self.logger.debug(f"✅ Final action plan: {action_plan}")
         return action_plan
     
     def _generate_fallback_action(self, description: str, context: Dict[str, Any], site_type: str) -> str:
         """Generate fallback action when primary generation fails"""
         
         description_lower = description.lower()
-        
         # Simple rule-based fallbacks based on description keywords
         if "navigate" in description_lower:
             if "search" in description_lower:
@@ -186,34 +195,49 @@ class WebExecutor:
         subtask_type = subtask.get("type", "general")
         action_lower = action.lower()
         
+        self.logger.debug(f"🔍 SUBTASK_COMPLETION_CHECK: Type='{subtask_type}', Action='{action}', ActionLower='{action_lower}'")
+        
         # Completion criteria based on subtask type
         if subtask_type == "navigation":
             # Navigation subtasks complete after one successful action
-            return action_lower != "none"
+            result = action_lower != "none"
+            self.logger.debug(f"📍 Navigation check: action_lower != 'none' = {result}")
+            return result
         
         elif subtask_type == "search":
             # Search subtasks complete after entering search query
-            return "type" in action_lower and "search" in action_lower
+            result = "type" in action_lower and "search" in action_lower
+            self.logger.debug(f"🔎 Search check: 'type' in action AND 'search' in action = {result}")
+            return result
         
         elif subtask_type == "click":
             # Click subtasks complete after one click
-            return "click" in action_lower
+            result = "click" in action_lower
+            self.logger.debug(f"🖱️  Click check: 'click' in action = {result}")
+            return result
         
         elif subtask_type == "input":
             # Input subtasks complete after typing
-            return "type" in action_lower
+            result = "type" in action_lower
+            self.logger.debug(f"⌨️  Input check: 'type' in action = {result}")
+            return result
         
         elif subtask_type == "extraction":
             # Extraction subtasks might need multiple actions
+            self.logger.debug(f"📤 Extraction check: Always False (continue until explicit)")
             return False  # Continue until explicit completion
         
         elif subtask_type == "verification":
             # Verification subtasks complete after one action
-            return action_lower != "none"
+            result = action_lower != "none"
+            self.logger.debug(f"✅ Verification check: action_lower != 'none' = {result}")
+            return result
         
         else:
             # General subtasks complete after one successful action
-            return action_lower != "none"
+            result = action_lower != "none"
+            self.logger.debug(f"🔧 General check: action_lower != 'none' = {result} ('{action_lower}' != 'none')")
+            return result
     
     def update_from_feedback(self, subtask: Dict[str, Any], action: str, success: bool, context: Dict[str, Any]):
         """Update executor based on action feedback"""

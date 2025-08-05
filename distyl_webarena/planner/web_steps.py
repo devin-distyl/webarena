@@ -25,7 +25,7 @@ class WebStepPlanner:
         self.n_candidates = n_candidates
         self.web_patterns = WebInteractionPatterns()
         self.site_actions = SiteSpecificActions()
-        self.logger = DistylLogger("WebStepPlanner")
+        self.logger = DistylLogger("WebStepPlanner", log_level="DEBUG")
         
         # Planning state
         self.current_plan = []
@@ -85,7 +85,11 @@ class WebStepPlanner:
         """Classify the type of website"""
         url_lower = url.lower()
         
-        if any(port in url for port in ["7770", "7780"]) or "shop" in url_lower:
+        # Check for shopping admin sites first (more specific)
+        if "/admin" in url_lower or "7780" in url:
+            return "shopping_admin"
+        # Check for regular shopping sites
+        elif "7770" in url or "shop" in url_lower:
             return "shopping"
         elif "9999" in url or "reddit" in url_lower:
             return "social"
@@ -184,7 +188,9 @@ class WebStepPlanner:
         login_status = context["login_status"]
         
         # Use site-specific planning logic
-        if site_type == "shopping":
+        if site_type == "shopping_admin":
+            return self._plan_shopping_admin_task(instruction, context, knowledge)
+        elif site_type == "shopping":
             return self._plan_shopping_task(instruction, context, knowledge)
         elif site_type == "social":
             return self._plan_social_task(instruction, context, knowledge)
@@ -194,6 +200,71 @@ class WebStepPlanner:
             return self._plan_knowledge_task(instruction, context, knowledge)
         else:
             return self._plan_general_task(instruction, context, knowledge)
+    
+    def _plan_shopping_admin_task(self, instruction: str, context: Dict[str, Any], knowledge: Dict[str, Any]) -> List[str]:
+        """Plan shopping admin panel tasks"""
+        
+        instruction_lower = instruction.lower()
+        
+        # Handle report generation tasks
+        if "report" in instruction_lower:
+            if "coupon" in instruction_lower:
+                return [
+                    "Navigate to Reports section",
+                    "Access Sales Reports",
+                    "Select Coupons report type", 
+                    "Set date range parameters",
+                    "Generate coupon report"
+                ]
+            elif "sales" in instruction_lower:
+                return [
+                    "Navigate to Reports section",
+                    "Access Sales Reports",
+                    "Configure sales report parameters",
+                    "Generate sales report"
+                ]
+            else:
+                return [
+                    "Navigate to Reports section",
+                    "Select appropriate report type",
+                    "Configure report parameters",
+                    "Generate requested report"
+                ]
+        
+        # Handle product/catalog management
+        elif "product" in instruction_lower and ("add" in instruction_lower or "create" in instruction_lower):
+            return [
+                "Navigate to Catalog section",
+                "Access product management",
+                "Create new product entry",
+                "Fill product details",
+                "Save product"
+            ]
+        
+        # Handle customer management
+        elif "customer" in instruction_lower:
+            return [
+                "Navigate to Customers section",
+                "Access customer management",
+                "Perform customer-related task"
+            ]
+        
+        # Handle order management
+        elif "order" in instruction_lower:
+            return [
+                "Navigate to Sales section",
+                "Access order management",
+                "Perform order-related task"
+            ]
+        
+        # General admin task fallback
+        else:
+            return [
+                "Navigate to appropriate admin section",
+                "Access relevant management area",
+                "Perform requested admin task",
+                "Verify task completion"
+            ]
     
     def _plan_shopping_task(self, instruction: str, context: Dict[str, Any], knowledge: Dict[str, Any]) -> List[str]:
         """Plan shopping-specific tasks"""

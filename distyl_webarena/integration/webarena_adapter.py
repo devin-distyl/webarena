@@ -22,14 +22,48 @@ class WebArenaAdapter:
     Adapter to integrate Distyl-WebArena with existing WebArena infrastructure
     """
     
-    def __init__(self, model_name: str = "distyl-webarena", config_path: str = None):
+    def __init__(self, model_name: str = "distyl-webarena", config_path: str = None, task_id: int = None):
         self.model_name = model_name
         self.config_path = config_path
-        self.logger = DistylLogger("WebArenaAdapter")
+        self.task_id = task_id
+        
+        # Set up logging with task-specific file if possible
+        self._setup_logging()
         
         # Initialize Distyl controller
         self.distyl_controller = None
         self._initialize_controller()
+    
+    def _setup_logging(self):
+        """Set up Distyl logging with file output"""
+        import time
+        from distyl_webarena.utils.logging import configure_logging
+        
+        # Create logs directory if it doesn't exist
+        os.makedirs("distyl_logs", exist_ok=True)
+        
+        # Set up timestamped log file
+        timestamp = time.strftime("%Y%m%d_%H%M%S", time.localtime())
+        task_suffix = f"_task_{self.task_id}" if self.task_id else ""
+        log_file = f"distyl_logs/distyl_webarena_{timestamp}{task_suffix}.log"
+        
+        # Configure global Distyl logging FIRST
+        configure_logging(
+            log_level="DEBUG",  # Changed from INFO to DEBUG
+            log_directory="distyl_logs",
+            enable_file_logging=True
+        )
+        
+        # Force DEBUG level for Python's root logging module
+        import logging
+        logging.getLogger().setLevel(logging.DEBUG)
+        logging.getLogger("distyl_webarena").setLevel(logging.DEBUG)
+        
+        # Create logger for this adapter
+        self.logger = DistylLogger("WebArenaAdapter", log_file=log_file)
+        
+        # Store log file path for later reference
+        self.log_file_path = log_file
     
     def _initialize_controller(self):
         """Initialize the Distyl WebArena controller"""
@@ -55,7 +89,8 @@ class WebArenaAdapter:
                 engine_params=engine_params,
                 memory_folder_name="distyl_webarena/memory",
                 enable_reflection=True,
-                enable_web_knowledge=True
+                enable_web_knowledge=True,
+                log_file=getattr(self, 'log_file_path', None)
             )
             
             self.logger.info("Distyl WebArena controller initialized successfully")
@@ -71,6 +106,10 @@ class WebArenaAdapter:
         Returns the DistylWebArenaController which implements the Agent interface
         """
         return self.distyl_controller
+    
+    def get_log_file_path(self):
+        """Get the path to the Distyl log file for this adapter"""
+        return getattr(self, 'log_file_path', None)
     
     def create_agent_config(self, task_config: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -225,11 +264,17 @@ def create_distyl_agent_for_webarena(task_config: Dict[str, Any],
         Agent instance compatible with WebArena's Agent interface
     """
     
-    adapter = WebArenaAdapter(model_name=model_name)
-    agent_config = adapter.create_agent_config(task_config)
+    # Extract task_id from config for logging
+    task_id = task_config.get("task_id", None)
+    
+    adapter = WebArenaAdapter(model_name=model_name, task_id=task_id)
+    
+    # Store adapter reference in the controller for log access
+    controller = adapter.get_agent_for_webarena()
+    controller._adapter = adapter  # Store reference for log file access
     
     # Return the controller which implements the Agent interface
-    return adapter.get_agent_for_webarena()
+    return controller
 
 
 def get_distyl_model_info() -> Dict[str, Any]:
