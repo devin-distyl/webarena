@@ -181,13 +181,20 @@ class WebStepPlanner:
         }
     
     def _generate_web_plan(self, instruction: str, context: Dict[str, Any], knowledge: Dict[str, Any]) -> List[str]:
-        """Generate web-specific plan"""
+        """Generate web-specific plan with LLM reasoning"""
         
         site_type = context["site_type"]
         current_page = context["current_page"]
         login_status = context["login_status"]
         
-        # Use site-specific planning logic
+        # Try LLM-powered planning first
+        llm_plan = self._generate_llm_plan(instruction, context, knowledge)
+        if llm_plan:
+            self.logger.debug(f"🧠 Using LLM-generated plan: {llm_plan}")
+            return llm_plan
+        
+        # Fallback to rule-based planning
+        self.logger.debug(f"🔧 Falling back to rule-based planning for site: {site_type}")
         if site_type == "shopping_admin":
             return self._plan_shopping_admin_task(instruction, context, knowledge)
         elif site_type == "shopping":
@@ -200,6 +207,97 @@ class WebStepPlanner:
             return self._plan_knowledge_task(instruction, context, knowledge)
         else:
             return self._plan_general_task(instruction, context, knowledge)
+    
+    def _generate_llm_plan(self, instruction: str, context: Dict[str, Any], knowledge: Dict[str, Any]) -> List[str]:
+        """Generate plan using LLM reasoning"""
+        try:
+            # Import WebArena's LLM interface
+            from llms import call_llm, lm_config
+            
+            # Create LLM config from engine params
+            config = lm_config.LMConfig(
+                provider=self.engine_params.get('provider', 'openai'),
+                model=self.engine_params.get('model', 'gpt-4o-2024-08-06'),
+                mode=self.engine_params.get('mode', 'chat'),
+                max_tokens=self.engine_params.get('max_tokens', 1024),
+                temperature=self.engine_params.get('temperature', 0.1),
+                context_length=self.engine_params.get('context_length', 0),
+                max_retry=self.engine_params.get('max_retry', 1)
+            )
+            
+            # Build comprehensive planning prompt
+            prompt = f"""You are a web automation planning agent. Create a step-by-step plan to complete this task:
+
+TASK: {instruction}
+
+CURRENT CONTEXT:
+- Site Type: {context.get('site_type', 'general')}
+- Current Page: {context.get('current_page', 'unknown')}
+- Login Status: {context.get('login_status', 'unknown')}
+- Current URL: {context.get('url', 'unknown')}
+- Available Actions: {', '.join(context.get('available_actions', []))}
+
+KNOWLEDGE:
+- Site Experience: {knowledge.get('site_experience', 'None')}
+- Similar Tasks: {knowledge.get('similar_tasks', 'None')}
+- Interaction Patterns: {knowledge.get('interaction_patterns', 'None')}
+
+Create a detailed step-by-step plan. Each step should be a clear, actionable instruction.
+Return your plan as a numbered list, one step per line.
+
+Example format:
+1. Navigate to the Reports section
+2. Click on Sales Reports
+3. Set date range from 05/01/2021 to 05/15/2023
+4. Generate the report
+
+PLAN:"""
+
+            # Call LLM and get response
+            response = call_llm(config, prompt)
+            self.logger.debug(f"🧠 LLM planning response: {response}")
+            
+            # Store the full reasoning trace for later use
+            self._planning_reasoning_trace = response
+            
+            # Parse response into plan steps
+            plan_steps = self._parse_llm_plan_response(response)
+            
+            if plan_steps:
+                self.logger.info(f"🧠 Generated LLM plan with {len(plan_steps)} steps")
+                return plan_steps
+            else:
+                self.logger.warning("🚨 LLM plan parsing failed, no valid steps found")
+                return []
+                
+        except Exception as e:
+            self.logger.error(f"💥 LLM planning failed: {e}")
+            return []
+    
+    def _parse_llm_plan_response(self, response: str) -> List[str]:
+        """Parse LLM response into plan steps"""
+        steps = []
+        lines = response.strip().split('\n')
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+                
+            # Remove numbering (1., 2., etc.)
+            import re
+            step_match = re.match(r'^\d+\.\s*(.+)', line)
+            if step_match:
+                steps.append(step_match.group(1))
+            elif line and not line.startswith(('#', '-', '*')):
+                # Include non-numbered lines that look like steps
+                steps.append(line)
+        
+        return steps[:10]  # Limit to 10 steps max
+    
+    def get_planning_reasoning_trace(self) -> str:
+        """Get the last LLM planning reasoning trace"""
+        return getattr(self, '_planning_reasoning_trace', '')
     
     def _plan_shopping_admin_task(self, instruction: str, context: Dict[str, Any], knowledge: Dict[str, Any]) -> List[str]:
         """Plan shopping admin panel tasks"""

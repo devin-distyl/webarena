@@ -150,6 +150,12 @@ class DistylWebArenaController(Agent):
                 # Convert Distyl action to WebArena Action format
                 webarena_action = self._convert_to_webarena_action(actions[0], distyl_context)
                 
+                # CRITICAL: Capture reasoning traces for WebArena viewer compatibility
+                reasoning_trace = self._collect_reasoning_traces(current_subtask, action_info, distyl_context)
+                webarena_action["raw_prediction"] = reasoning_trace
+                
+                self.logger.debug(f"🧠 Captured reasoning trace: {reasoning_trace[:200]}...")
+                
                 # Update trajectory and check subtask completion
                 if action_info.get("subtask_complete", False):
                     self.current_subtask_idx += 1
@@ -548,6 +554,60 @@ class DistylWebArenaController(Agent):
             return quoted_match.group(1)
         
         return ""
+    
+    def _collect_reasoning_traces(self, subtask: Dict[str, Any], action_info: Dict[str, Any], context: Dict[str, Any]) -> str:
+        """Collect all reasoning traces from LLM calls for WebArena viewer compatibility"""
+        
+        reasoning_parts = []
+        
+        # Add planning reasoning trace
+        if hasattr(self.planner, 'get_planning_reasoning_trace'):
+            planning_trace = self.planner.get_planning_reasoning_trace()
+            if planning_trace:
+                reasoning_parts.append(f"=== PLANNING REASONING ===\n{planning_trace}")
+        
+        # Add subtask context
+        reasoning_parts.append(f"=== CURRENT SUBTASK ===")
+        reasoning_parts.append(f"Description: {subtask.get('description', 'Unknown')}")
+        reasoning_parts.append(f"Type: {subtask.get('type', 'general')}")
+        reasoning_parts.append(f"Site: {subtask.get('site_type', 'general')}")
+        reasoning_parts.append(f"Subtask {self.current_subtask_idx + 1} of {len(self.current_subtasks)}")
+        
+        # Add execution context
+        reasoning_parts.append(f"=== EXECUTION CONTEXT ===")
+        obs = context.get('observation', {})
+        reasoning_parts.append(f"Current URL: {obs.get('url', 'unknown')}")
+        reasoning_parts.append(f"Page has accessibility tree: {bool(obs.get('accessibility_tree', ''))}")
+        reasoning_parts.append(f"Action history length: {len(context.get('action_history', []))}")
+        
+        # Add current plan overview
+        reasoning_parts.append(f"=== PLAN OVERVIEW ===")
+        for i, task in enumerate(self.current_subtasks):
+            status = "✅ DONE" if i < self.current_subtask_idx else ("🟦 CURRENT" if i == self.current_subtask_idx else "⏳ PENDING")
+            reasoning_parts.append(f"{i+1}. {status} {task.get('description', '')}")
+        
+        # Add grounding reasoning if available
+        if hasattr(self.grounder, '_last_grounding_trace'):
+            grounding_trace = getattr(self.grounder, '_last_grounding_trace', '')
+            if grounding_trace:
+                reasoning_parts.append(f"=== ELEMENT GROUNDING ===\n{grounding_trace}")
+        
+        # Add action validation info
+        if action_info:
+            reasoning_parts.append(f"=== ACTION VALIDATION ===")
+            reasoning_parts.append(f"Action valid: {action_info.get('action_valid', False)}")
+            reasoning_parts.append(f"Subtask complete: {action_info.get('subtask_complete', False)}")
+            if 'error' in action_info:
+                reasoning_parts.append(f"Error: {action_info['error']}")
+        
+        # Combine all reasoning parts
+        full_trace = "\n\n".join(reasoning_parts)
+        
+        # Ensure it's not too long (limit to 4000 chars for viewer compatibility)
+        if len(full_trace) > 4000:
+            full_trace = full_trace[:3950] + "\n\n[... reasoning trace truncated ...]"
+        
+        return full_trace
     
     def _extract_key_combination(self, action_str: str) -> str:
         """Extract key combination from press action"""

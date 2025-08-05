@@ -86,8 +86,8 @@ class WebReflectionAgent:
             elif "link" in subtask.get("description", "").lower():
                 return "click [auto_detect_link]"
             else:
-                # Try scrolling to find element
-                return "scroll [down]"
+                # MODIFIED: Fail immediately instead of scrolling
+                return "none"
         
         elif "type" in failed_action_lower:
             # Try different input field detection
@@ -97,8 +97,8 @@ class WebReflectionAgent:
                 return "click [auto_detect_field]"
         
         else:
-            # General fallback - scroll to see more content
-            return "scroll [down]"
+            # MODIFIED: Fail immediately instead of scrolling
+            return "none"
     
     def _suggest_for_validation_failure(self, subtask: Dict[str, Any], failed_action: str, 
                                       context: Dict[str, Any]) -> str:
@@ -108,7 +108,7 @@ class WebReflectionAgent:
         subtask_type = subtask.get("type", "general")
         
         if subtask_type == "navigation":
-            return "scroll [down]"
+            return "none"  # MODIFIED: Fail immediately
         elif subtask_type == "search":
             return "click [auto_detect_search_field]"
         elif subtask_type == "click":
@@ -116,14 +116,14 @@ class WebReflectionAgent:
         elif subtask_type == "input":
             return "click [auto_detect_field]"
         else:
-            return "scroll [down]"
+            return "none"  # MODIFIED: Fail immediately
     
     def _suggest_for_timeout(self, subtask: Dict[str, Any], failed_action: str, 
                            context: Dict[str, Any]) -> str:
         """Suggest alternatives when action times out"""
         
-        # Wait for page to load, then retry simpler action
-        return "scroll [down]"  # Simple action to wait for page load
+        # MODIFIED: Fail immediately on timeout instead of waiting
+        return "none"
     
     def _suggest_generic_alternative(self, subtask: Dict[str, Any], failed_action: str, 
                                    context: Dict[str, Any]) -> str:
@@ -131,9 +131,9 @@ class WebReflectionAgent:
         
         subtask_description = subtask.get("description", "").lower()
         
-        # Context-based suggestions
+        # Context-based suggestions - MODIFIED: More specific, less scrolling
         if "navigate" in subtask_description:
-            return "scroll [down]"
+            return "none"  # MODIFIED: Fail immediately on navigation issues
         elif "search" in subtask_description:
             return "click [auto_detect_search_field]"
         elif "admin" in subtask_description:
@@ -141,7 +141,7 @@ class WebReflectionAgent:
         elif "review" in subtask_description:
             return "click [auto_detect_reviews_menu]"
         else:
-            return "scroll [down]"
+            return "none"  # MODIFIED: Fail immediately instead of scroll fallback
     
     def analyze_trajectory_patterns(self, trajectory_history: list) -> Dict[str, Any]:
         """Analyze patterns in trajectory for improvement suggestions"""
@@ -203,8 +203,9 @@ class WebReflectionAgent:
     def should_replan(self, consecutive_failures: int) -> bool:
         """Determine if we should trigger replanning based on consecutive failures"""
         
-        # Replan if we have multiple consecutive failures
-        return consecutive_failures >= 3
+        # MODIFIED: Fail faster - replan after just 1 failure instead of 3
+        # This prevents the "scroll down 3 times" pattern
+        return consecutive_failures >= 1
     
     def generate_debugging_info(self, subtask: Dict[str, Any], context: Dict[str, Any]) -> str:
         """Generate debugging information for failed subtasks"""

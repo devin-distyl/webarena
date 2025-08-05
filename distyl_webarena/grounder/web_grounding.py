@@ -134,10 +134,30 @@ Element ID:"""
         return "\n".join(formatted)
     
     def _call_llm(self, prompt: str) -> str:
-        """Call LLM with prompt - placeholder for actual implementation"""
-        # This would integrate with the actual LLM service
-        # For now, return a placeholder
-        return "none"
+        """Call LLM with prompt using WebArena's LLM interface"""
+        try:
+            # Import WebArena's LLM interface
+            from llms import call_llm, lm_config
+            
+            # Create LLM config from engine params
+            config = lm_config.LMConfig(
+                provider=self.engine_params.get('provider', 'openai'),
+                model=self.engine_params.get('model', 'gpt-4o-2024-08-06'),
+                mode=self.engine_params.get('mode', 'chat'),
+                max_tokens=self.engine_params.get('max_tokens', 512),
+                temperature=self.engine_params.get('temperature', 0.1),
+                context_length=self.engine_params.get('context_length', 0),
+                max_retry=self.engine_params.get('max_retry', 1)
+            )
+            
+            # Call LLM and return response
+            response = call_llm(config, prompt)
+            self.logger.debug(f"🤖 LLM grounding response: {response}")
+            return response
+            
+        except Exception as e:
+            self.logger.error(f"LLM call failed: {e}")
+            return "none"
     
     def _load_semantic_patterns(self) -> Dict[str, List[str]]:
         """Load common semantic patterns for web elements"""

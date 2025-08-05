@@ -136,7 +136,7 @@ class WebExecutor:
             elif "admin" in description_lower:
                 return "click [auto_detect_admin_menu]"
             else:
-                return "scroll [down]"  # General navigation
+                return "none"  # MODIFIED: Fail navigation attempts immediately
         
         elif "search" in description_lower:
             query = self._extract_search_query(description)
@@ -151,14 +151,14 @@ class WebExecutor:
                 return "click [auto_detect_element]"
         
         elif "extract" in description_lower or "get" in description_lower:
-            return "scroll [down]"  # Scroll to view content
+            return "none"  # MODIFIED: Fail extraction attempts immediately
         
         elif "verify" in description_lower:
-            return "scroll [down]"  # Scroll to verify content
+            return "none"  # MODIFIED: Fail verification attempts immediately
         
         else:
-            # Ultimate fallback
-            return "scroll [down]"
+            # MODIFIED: Ultimate fallback changed to none
+            return "none"
     
     def _extract_search_query(self, description: str) -> str:
         """Extract search query from description"""
