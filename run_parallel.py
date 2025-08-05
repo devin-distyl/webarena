@@ -12,6 +12,7 @@ import json
 import threading
 import argparse
 import shutil
+import re
 from pathlib import Path
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -19,6 +20,45 @@ from typing import Dict, List, Tuple, Optional
 
 # Import Docker isolation manager for isolated container environments
 from browser_env.docker_isolation_manager import DockerIsolationManager
+
+
+def parse_evaluation_results(stdout: str, stderr: str) -> Tuple[float, bool, str]:
+    """
+    Parse evaluation results from stdout/stderr
+
+    Returns:
+        Tuple of (score, task_success, eval_type)
+        - score: The evaluation score (0.0 to 1.0)
+        - task_success: Whether the task passed evaluation
+        - eval_type: PASS/FAIL/ERROR
+    """
+    score = 0.0
+    task_success = False
+    eval_type = "ERROR"
+
+    # Parse score from "Average score: X.X" line
+    score_match = re.search(r"Average score:\s*([0-9.]+)", stdout)
+    if score_match:
+        try:
+            score = float(score_match.group(1))
+        except ValueError:
+            pass
+
+    # Parse pass/fail from "[Result] (PASS)" or "[Result] (FAIL)" lines
+    if re.search(r"\[Result\]\s*\(PASS\)", stdout):
+        task_success = True
+        eval_type = "PASS"
+    elif re.search(r"\[Result\]\s*\(FAIL\)", stdout):
+        task_success = False
+        eval_type = "FAIL"
+
+    # Additional check - if score is 1.0, it's a pass
+    if score >= 1.0:
+        task_success = True
+        eval_type = "PASS"
+
+    return score, task_success, eval_type
+
 
 def setup_environment():
     """Setup environment variables for WebArena"""
@@ -116,10 +156,7 @@ def run_single_task_isolated(task_id, provider, model, base_env, result_containe
             "--result_dir", result_dir
         ]
         
-        # Replace config file references to use our temporary isolated config
-        for i, arg in enumerate(cmd):
-            if arg == "--config_file" and i + 1 < len(cmd):
-                cmd[i + 1] = temp_config_path
+        # Config file is already handled by temporarily modifying the original config file
         
         # Activate virtual environment and run with isolated environment
         activate_cmd = "source webarena-env/bin/activate && " + " ".join(cmd)
@@ -136,21 +173,20 @@ def run_single_task_isolated(task_id, provider, model, base_env, result_containe
         # Note: Config file will be restored in finally block
         
         elapsed = time.time() - start_time
-        success = result.returncode == 0
+        process_success = result.returncode == 0
         
-        # Extract score from output
-        score = 0.0
-        if result.stdout and "Average score:" in result.stdout:
-            try:
-                score_line = [line for line in result.stdout.split('\n') if 'Average score:' in line][-1]
-                score = float(score_line.split('Average score:')[1].strip())
-            except:
-                pass
+        # Parse evaluation results from output
+        score, task_success, eval_type = parse_evaluation_results(
+            result.stdout or "", result.stderr or ""
+        )
         
         task_result = {
             'task_id': task_id,
-            'success': success,
-            'score': score,
+            'process_success': process_success,  # Did the script run without crashing
+            'task_success': task_success,  # Did the agent complete the task successfully
+            'success': process_success,  # Keep for backward compatibility
+            'score': score,  # Actual evaluation score
+            'eval_type': eval_type,  # PASS/FAIL/ERROR
             'elapsed_time': elapsed,
             'thread_id': thread_id,
             'returncode': result.returncode,
@@ -166,8 +202,8 @@ def run_single_task_isolated(task_id, provider, model, base_env, result_containe
         
         with lock:
             result_container.append(task_result)
-            status = "✅ PASS" if success and score > 0.5 else "❌ FAIL"
-            if not success and result.stderr:
+            status = "✅ PASS" if task_success else "❌ FAIL"
+            if not process_success and result.stderr:
                 print(f"🏁 [Thread {thread_id}] Task {task_id}: {status} (Score: {score:.2f}, Time: {elapsed:.1f}s)")
                 print(f"   ⚠️  Error: {result.stderr.strip()[:200]}..." if len(result.stderr.strip()) > 200 else f"   ⚠️  Error: {result.stderr.strip()}")
             else:
@@ -182,12 +218,17 @@ def run_single_task_isolated(task_id, provider, model, base_env, result_containe
         
         task_result = {
             'task_id': task_id,
-            'success': False,
+            'process_success': False,
+            'task_success': False,
+            'success': False,  # Keep for backward compatibility
             'score': 0.0,
+            'eval_type': 'ERROR',
             'elapsed_time': elapsed,
             'thread_id': thread_id,
             'returncode': -1,
             'error': 'TIMEOUT',
+            'stdout': '',
+            'stderr': 'TIMEOUT',
             'model': model,
             'provider': provider,
             'docker_ports': f"{isolated_env.base_port}-{isolated_env.base_port + 99}" if isolated_env else "none"
@@ -205,12 +246,17 @@ def run_single_task_isolated(task_id, provider, model, base_env, result_containe
         
         task_result = {
             'task_id': task_id,
-            'success': False,
+            'process_success': False,
+            'task_success': False,
+            'success': False,  # Keep for backward compatibility
             'score': 0.0,
+            'eval_type': 'ERROR',
             'elapsed_time': elapsed,
             'thread_id': thread_id,
             'returncode': -1,
             'error': str(e),
+            'stdout': '',
+            'stderr': str(e),
             'model': model,
             'provider': provider,
             'docker_ports': f"{isolated_env.base_port}-{isolated_env.base_port + 99}" if isolated_env else "none"
@@ -411,16 +457,24 @@ def run_parallel_demo(task_ids, provider, model):
     # Sort results by task_id for consistent display
     results.sort(key=lambda x: x['task_id'])
     
-    # Summary statistics
-    successful_tasks = sum(1 for r in results if r['success'] and r.get('score', 0) > 0.5)
+    # Summary statistics - now with both process and task success
+    process_successful_tasks = sum(1 for r in results if r.get('process_success', r.get('success', False)))
+    task_successful_tasks = sum(1 for r in results if r.get('task_success', False))
     total_score = sum(r.get('score', 0) for r in results)
     avg_score = total_score / len(results) if results else 0.0
     avg_time = sum(r['elapsed_time'] for r in results) / len(results) if results else 0.0
     
+    # Process success rate (no crashes)
+    process_success_rate = process_successful_tasks / len(task_ids) if len(task_ids) > 0 else 0
+    
+    # Task success rate (evaluation passed)  
+    task_success_rate = task_successful_tasks / len(task_ids) if len(task_ids) > 0 else 0
+    
     print(f"\n🎯 Overall Performance:")
     print(f"  Model: {model}")
     print(f"  Provider: {provider}")
-    print(f"  Success rate: {successful_tasks}/{len(task_ids)} ({successful_tasks/len(task_ids)*100:.1f}%)")
+    print(f"  Process success rate: {process_successful_tasks}/{len(task_ids)} ({process_success_rate*100:.1f}%)")
+    print(f"  Task success rate: {task_successful_tasks}/{len(task_ids)} ({task_success_rate*100:.1f}%)")
     print(f"  Average score: {avg_score:.3f}")
     print(f"  Average time per task: {avg_time:.1f}s")
     print(f"  Total wall clock time: {total_elapsed:.1f}s")
@@ -465,10 +519,12 @@ def run_parallel_demo(task_ids, provider, model):
         'total_elapsed_time': total_elapsed,
         'parallel_efficiency': (avg_time * len(task_ids)) / total_elapsed if total_elapsed > 0 else 0,
         'summary': {
-            'success_rate': successful_tasks / len(task_ids),
+            'process_success_rate': process_success_rate,
+            'task_success_rate': task_success_rate,
             'avg_score': avg_score,
             'avg_time_per_task': avg_time,
-            'successful_tasks': successful_tasks,
+            'process_successful_tasks': process_successful_tasks,
+            'task_successful_tasks': task_successful_tasks,
             'total_tasks': len(task_ids)
         },
         'task_info': task_info,
@@ -515,7 +571,8 @@ def run_parallel_demo(task_ids, provider, model):
 - **Model**: {model}
 - **Provider**: {provider}
 - **Tasks**: {task_ids}
-- **Success Rate**: {successful_tasks}/{len(task_ids)} ({successful_tasks/len(task_ids)*100:.1f}%)
+- **Process Success Rate**: {process_successful_tasks}/{len(task_ids)} ({process_success_rate*100:.1f}%)
+- **Task Success Rate**: {task_successful_tasks}/{len(task_ids)} ({task_success_rate*100:.1f}%)
 
 ## File Structure
 ```

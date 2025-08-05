@@ -1,4 +1,20 @@
 import asyncio
+import warnings
+
+# Suppress beartype PEP 585 deprecation warnings from gymnasium
+try:
+    from beartype.roar import BeartypeDecorHintPepDeprecationWarning
+    warnings.filterwarnings(
+        "ignore",
+        category=BeartypeDecorHintPepDeprecationWarning,
+        module="beartype._util.hint.pep.utilpeptest"
+    )
+except ImportError:
+    # Fallback for different beartype versions
+    warnings.filterwarnings(
+        "ignore",
+        message=".*PEP 484 type hint typing.Mapping.*deprecated by PEP 585.*"
+    )
 
 from .actions import (
     Action,
