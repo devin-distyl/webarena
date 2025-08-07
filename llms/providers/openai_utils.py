@@ -54,17 +54,17 @@ def openai_llm(prompt: str, image: Union[str, npt.NDArray[np.uint8], None] = Non
     ]
 
     if output_model is not None:
-        # Use structured output with parse
+        # Use structured output with parse - using GPT-5 model
         response = client.responses.parse(
-            model="gpt-4o-2024-08-06",
+            model="gpt-5-mini-2025-08-07",
             input=input_messages,
             text_format=output_model,
         )
         return response.output_parsed
     else:
-        # Use regular text output
+        # Use regular text output - using GPT-5 model
         response = client.responses.create(
-            model="gpt-4o",
+            model="gpt-5-mini-2025-08-07",
             input=input_messages
         )
         return response.output_text

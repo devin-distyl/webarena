@@ -93,7 +93,7 @@ class WebArenaRunner:
             meta_data = {"action_history": ["None"]}
             
             # Main interaction loop
-            max_steps = 5
+            max_steps = 20
             for step in range(max_steps):
                 # Take screenshot
                 self.debug_helper.take_screenshot(env.page, step, task_id)
@@ -160,7 +160,7 @@ class WebArenaRunner:
         # Ensure auth is set up
         self._ensure_auth()
         
-        slow_mo = 300 if not headless else 0  # 1 second delay when visible
+        slow_mo = 100 if not headless else 0  # 1 second delay when visible
         
         # Setup environment
         env = ScriptBrowserEnv(
