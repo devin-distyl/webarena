@@ -1,4 +1,5 @@
 import argparse
+import logging
 from typing import Any
 
 from llms import (
@@ -16,10 +17,14 @@ def call_llm(
     prompt: APIInput,
 ) -> str:
     response: str
+
+    logger = logging.getLogger(__name__)
+
     if lm_config.provider == "openai":
         if lm_config.mode == "chat":
             assert isinstance(prompt, list)
-            response = generate_from_openai_chat_completion(
+            try: 
+                response = generate_from_openai_chat_completion(
                 messages=prompt,
                 model=lm_config.model,
                 temperature=lm_config.gen_config["temperature"],
@@ -28,6 +33,9 @@ def call_llm(
                 max_tokens=lm_config.gen_config["max_tokens"],
                 stop_token=None,
             )
+            except Exception as e:
+                logger.error(f"Error calling OpenAI chat completion: {e}")
+                raise e
         elif lm_config.mode == "completion":
             assert isinstance(prompt, str)
             response = generate_from_openai_completion(

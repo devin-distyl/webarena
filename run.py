@@ -18,6 +18,7 @@ from agent import (
     TeacherForcingAgent,
     construct_agent,
 )
+from agent.distyl_agent import DistylAgent
 from agent.prompts import *
 from browser_env import (
     Action,
@@ -74,7 +75,7 @@ def config() -> argparse.Namespace:
     )
     parser.add_argument(
         "--observation_type",
-        choices=["accessibility_tree", "html", "image"],
+        choices=["accessibility_tree", "html", "image", "accessibility_tree_image", "html_image"],
         default="accessibility_tree",
         help="Observation type",
     )

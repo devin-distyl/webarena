@@ -25,8 +25,8 @@ class LMConfig:
     provider: str
     model: str
     model_cls: type | None = None
-    tokenizer_cls: type | None = None
     mode: str | None = None
+    tokenizer_cls: type | None = None
     gen_config: dict[str, Any] = dataclasses.field(default_factory=dict)
 
 
@@ -36,12 +36,12 @@ def construct_llm_config(args: argparse.Namespace) -> LMConfig:
     )
     if args.provider == "openai":
         llm_config.gen_config["temperature"] = args.temperature
-        llm_config.gen_config["top_p"] = args.top_p
-        llm_config.gen_config["context_length"] = args.context_length
-        llm_config.gen_config["max_tokens"] = args.max_tokens
-        llm_config.gen_config["stop_token"] = args.stop_token
-        llm_config.gen_config["max_obs_length"] = args.max_obs_length
-        llm_config.gen_config["max_retry"] = args.max_retry
+        llm_config.gen_config["top_p"] = 0.9
+        llm_config.gen_config["context_length"] = 0
+        llm_config.gen_config["max_tokens"] = 384
+        llm_config.gen_config["stop_token"] = None
+        llm_config.gen_config["max_obs_length"] = 1920
+        llm_config.gen_config["max_retry"] = 1
     elif args.provider == "huggingface":
         llm_config.gen_config["temperature"] = args.temperature
         llm_config.gen_config["top_p"] = args.top_p

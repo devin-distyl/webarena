@@ -2,59 +2,114 @@
 Adopted from https://github.com/zeno-ml/zeno-build/"""
 
 import asyncio
+import base64
+import io
 import logging
 import os
 import random
 import time
-from typing import Any
+from typing import Any, Union
 
 import aiolimiter
+import numpy as np
+import numpy.typing as npt
 import openai
-import openai.error
+# import openai.error
+from openai import OpenAI
+from PIL import Image
+from pydantic import BaseModel
 from tqdm.asyncio import tqdm_asyncio
 
+def openai_llm(prompt: str, image: Union[str, npt.NDArray[np.uint8], None] = None, output_model: BaseModel | None = None) -> Union[str, BaseModel]:
+    client = OpenAI()
 
-def retry_with_exponential_backoff(  # type: ignore
-    func,
-    initial_delay: float = 1,
-    exponential_base: float = 2,
-    jitter: bool = True,
-    max_retries: int = 3,
-    errors: tuple[Any] = (openai.error.RateLimitError,),
-):
-    """Retry a function with exponential backoff."""
+    content = [{"type": "input_text", "text": prompt}]
 
-    def wrapper(*args, **kwargs):  # type: ignore
-        # Initialize variables
-        num_retries = 0
-        delay = initial_delay
+    if image is not None:
+        if isinstance(image, str):
+            # Handle file path
+            with open(image, "rb") as image_file:
+                base64_image = base64.b64encode(image_file.read()).decode("utf-8")
+        elif isinstance(image, np.ndarray):
+            # Handle numpy array (screenshot from browser)
+            pil_image = Image.fromarray(image)
+            byte_io = io.BytesIO()
+            pil_image.save(byte_io, format="PNG")
+            byte_io.seek(0)
+            base64_image = base64.b64encode(byte_io.read()).decode("utf-8")
+        else:
+            raise ValueError(f"Unsupported image type: {type(image)}")
+            
+        content.append({
+            "type": "input_image",
+            "image_url": f"data:image/png;base64,{base64_image}"
+        })
 
-        # Loop until a successful response or max_retries is hit or an exception is raised
-        while True:
-            try:
-                return func(*args, **kwargs)
-            # Retry on specified errors
-            except errors as e:
-                # Increment retries
-                num_retries += 1
+    input_messages = [
+        {
+            "role": "user",
+            "type": "message",
+            "content": content
+        }
+    ]
 
-                # Check if max retries has been reached
-                if num_retries > max_retries:
-                    raise Exception(
-                        f"Maximum number of retries ({max_retries}) exceeded."
-                    )
+    if output_model is not None:
+        # Use structured output with parse
+        response = client.responses.parse(
+            model="gpt-4o-2024-08-06",
+            input=input_messages,
+            text_format=output_model,
+        )
+        return response.output_parsed
+    else:
+        # Use regular text output
+        response = client.responses.create(
+            model="gpt-4o",
+            input=input_messages
+        )
+        return response.output_text
 
-                # Increment the delay
-                delay *= exponential_base * (1 + jitter * random.random())
-                print(f"Retrying in {delay} seconds.")
-                # Sleep for the delay
-                time.sleep(delay)
+# def retry_with_exponential_backoff(  # type: ignore
+#     func,
+#     initial_delay: float = 1,
+#     exponential_base: float = 2,
+#     jitter: bool = True,
+#     max_retries: int = 3,
+#     errors: tuple[Any] = (openai.error.RateLimitError,),
+# ):
+#     """Retry a function with exponential backoff."""
 
-            # Raise exceptions for any errors not specified
-            except Exception as e:
-                raise e
+#     def wrapper(*args, **kwargs):  # type: ignore
+#         # Initialize variables
+#         num_retries = 0
+#         delay = initial_delay
 
-    return wrapper
+#         # Loop until a successful response or max_retries is hit or an exception is raised
+#         while True:
+#             try:
+#                 return func(*args, **kwargs)
+#             # Retry on specified errors
+#             except errors as e:
+#                 # Increment retries
+#                 num_retries += 1
+
+#                 # Check if max retries has been reached
+#                 if num_retries > max_retries:
+#                     raise Exception(
+#                         f"Maximum number of retries ({max_retries}) exceeded."
+#                     )
+
+#                 # Increment the delay
+#                 delay *= exponential_base * (1 + jitter * random.random())
+#                 print(f"Retrying in {delay} seconds.")
+#                 # Sleep for the delay
+#                 time.sleep(delay)
+
+#             # Raise exceptions for any errors not specified
+#             except Exception as e:
+#                 raise e
+
+#     return wrapper
 
 
 async def _throttled_openai_completion_acreate(
@@ -131,7 +186,7 @@ async def agenerate_from_openai_completion(
     return [x["choices"][0]["text"] for x in responses]
 
 
-@retry_with_exponential_backoff
+# @retry_with_exponential_backoff
 def generate_from_openai_completion(
     prompt: str,
     engine: str,
@@ -236,7 +291,7 @@ async def agenerate_from_openai_chat_completion(
     return [x["choices"][0]["message"]["content"] for x in responses]
 
 
-@retry_with_exponential_backoff
+# @retry_with_exponential_backoff
 def generate_from_openai_chat_completion(
     messages: list[dict[str, str]],
     model: str,
@@ -246,6 +301,8 @@ def generate_from_openai_chat_completion(
     context_length: int,
     stop_token: str | None = None,
 ) -> str:
+    logger = logging.getLogger(__name__)
+
     if "OPENAI_API_KEY" not in os.environ:
         raise ValueError(
             "OPENAI_API_KEY environment variable must be set when using OpenAI API."
@@ -253,7 +310,8 @@ def generate_from_openai_chat_completion(
     openai.api_key = os.environ["OPENAI_API_KEY"]
     openai.organization = os.environ.get("OPENAI_ORGANIZATION", "")
 
-    response = openai.ChatCompletion.create(  # type: ignore
+    try:
+        response = openai.ChatCompletion.create(  # type: ignore
         model=model,
         messages=messages,
         temperature=temperature,
@@ -261,11 +319,14 @@ def generate_from_openai_chat_completion(
         top_p=top_p,
         stop=[stop_token] if stop_token else None,
     )
-    answer: str = response["choices"][0]["message"]["content"]
-    return answer
+        answer: str = response["choices"][0]["message"]["content"]
+        return answer
+    except Exception as e:
+        logger.error(f"Error calling OpenAI chat completion: {e}")
+        raise e
 
 
-@retry_with_exponential_backoff
+# @retry_with_exponential_backoff
 # debug only
 def fake_generate_from_openai_chat_completion(
     messages: list[dict[str, str]],

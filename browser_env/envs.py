@@ -104,6 +104,12 @@ class ScriptBrowserEnv(Env[dict[str, Observation], Action]):
                 self.image_observation_type = observation_type
                 self.text_observation_type = ""  # type: ignore[assignment]
                 self.main_observation_type = "image"
+            case "html_image" | "accessibility_tree_image":
+                # Combined mode: text + image observations
+                base_text_type = observation_type.replace("_image", "")
+                self.text_observation_type = base_text_type
+                self.image_observation_type = "image"
+                self.main_observation_type = "text"  # Keep text as main for compatibility
             case _:
                 raise ValueError(
                     f"Unsupported observation type: {observation_type}"

@@ -21,8 +21,10 @@ from llms import (
     generate_from_openai_chat_completion,
     generate_from_openai_completion,
     lm_config,
+    openai_llm,
 )
 from llms.tokenizers import Tokenizer
+from agent.distyl_agent import DistylAgent
 
 
 class Agent:
@@ -163,6 +165,9 @@ def construct_agent(args: argparse.Namespace) -> Agent:
     agent: Agent
     if args.agent_type == "teacher_forcing":
         agent = TeacherForcingAgent()
+    elif args.agent_type == "distyl":
+        tokenizer = Tokenizer(args.provider, args.model)
+        agent = DistylAgent(llm_config, tokenizer)
     elif args.agent_type == "prompt":
         with open(args.instruction_path) as f:
             constructor_type = json.load(f)["meta_data"]["prompt_constructor"]

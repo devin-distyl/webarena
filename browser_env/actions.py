@@ -106,6 +106,7 @@ class Action(TypedDict):
     pw_code: str
     answer: str
     raw_prediction: str  # raw prediction from the model
+    reasoning: str  # reasoning for the action
 
 
 @beartype
@@ -421,6 +422,7 @@ def create_random_action() -> Action:
         ),
         "answer": str(np.random.randint(MAX_ANSWER_LENGTH)),
         "raw_prediction": str(np.random.randint(MAX_ANSWER_LENGTH)),
+        "reasoning": "",
     }
 
 
@@ -442,6 +444,7 @@ def create_none_action() -> Action:
         "direction": "",
         "answer": "",
         "raw_prediction": "",
+        "reasoning": "",
     }
 
 
