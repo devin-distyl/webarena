@@ -15,7 +15,8 @@ APIInput = str | list[Any] | dict[str, Any]
 def call_llm(
     lm_config: lm_config.LMConfig,
     prompt: APIInput,
-) -> str:
+    output_model: Any = None,
+) -> str | Any:
     response: str
 
     logger = logging.getLogger(__name__)
@@ -32,6 +33,7 @@ def call_llm(
                 context_length=lm_config.gen_config["context_length"],
                 max_tokens=lm_config.gen_config["max_tokens"],
                 stop_token=None,
+                output_model=output_model,
             )
             except Exception as e:
                 logger.error(f"Error calling OpenAI chat completion: {e}")

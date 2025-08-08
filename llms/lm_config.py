@@ -38,7 +38,7 @@ def construct_llm_config(args: argparse.Namespace) -> LMConfig:
         llm_config.gen_config["temperature"] = args.temperature
         llm_config.gen_config["top_p"] = 0.9
         llm_config.gen_config["context_length"] = 0
-        llm_config.gen_config["max_tokens"] = 384
+        llm_config.gen_config["max_tokens"] = 4096
         llm_config.gen_config["stop_token"] = None
         llm_config.gen_config["max_obs_length"] = 1920
         llm_config.gen_config["max_retry"] = 1

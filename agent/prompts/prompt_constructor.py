@@ -43,7 +43,22 @@ class PromptConstructor(object):
         message: list[dict[str, str]] | str
         if "openai" in self.lm_config.provider:
             if self.lm_config.mode == "chat":
-                message = [{"role": "system", "content": intro}]
+                # Add structured output instructions for OpenAI models
+                system_content = intro
+                if self.lm_config.provider == "openai":
+                    system_content += """
+
+IMPORTANT: You must respond with a JSON object containing exactly two fields:
+1. "reasoning": Your step-by-step thinking process explaining what you observe, what you need to do, and why
+2. "action": ONLY the raw action command (e.g., "click [120]", "stop [answer]", "type [164] [text]")
+
+Example format:
+{
+  "reasoning": "Let me analyze the current page. I can see the Magento admin dashboard with several menu options. The objective is to find the top-1 best-selling product in 2022. I notice there's already a 'Bestsellers' tab visible in the dashboard that shows 'Quest Lumaflex™ Band' as the top product. Since this appears to be the bestsellers data, I can provide this as the answer.",
+  "action": "stop [Quest Lumaflex™ Band]"
+}"""
+                
+                message = [{"role": "system", "content": system_content}]
                 for (x, y) in examples:
                     message.append(
                         {

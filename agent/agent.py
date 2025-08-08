@@ -127,11 +127,27 @@ class PromptAgent(Agent):
         lm_config = self.lm_config
         n = 0
         while True:
-            response = call_llm(lm_config, prompt)
+            # Check if we should use structured outputs for OpenAI models
+            if lm_config.provider == "openai":
+                from llms.providers.openai_utils import AgentResponse
+                structured_response = call_llm(lm_config, prompt, output_model=AgentResponse)
+                
+                # Handle structured response
+                if hasattr(structured_response, 'reasoning') and hasattr(structured_response, 'action'):
+                    # Format structured response for existing action parsing logic
+                    response = f"{structured_response.reasoning}\n\nIn summary, the next action I will perform is ```{structured_response.action}```"
+                else:
+                    # Fallback to treating as regular string response
+                    response = str(structured_response)
+            else:
+                response = call_llm(lm_config, prompt)
+                
             force_prefix = self.prompt_constructor.instruction[
                 "meta_data"
             ].get("force_prefix", "")
             response = f"{force_prefix}{response}"
+            
+            
             n += 1
             try:
                 parsed_response = self.prompt_constructor.extract_action(

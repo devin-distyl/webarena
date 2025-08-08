@@ -15,12 +15,19 @@ import numpy as np
 import numpy.typing as npt
 import openai
 # import openai.error
-from openai import OpenAI
+from openai import OpenAI, AsyncOpenAI
 from PIL import Image
 from pydantic import BaseModel
+from typing import Optional
 from tqdm.asyncio import tqdm_asyncio
 
-def openai_llm(prompt: str, image: Union[str, npt.NDArray[np.uint8], None] = None, output_model: BaseModel | None = None) -> Union[str, BaseModel]:
+
+class AgentResponse(BaseModel):
+    """Structured response model for GPT-5 agents with explicit reasoning and action"""
+    reasoning: str
+    action: str
+
+def openai_llm(prompt: str, image: Union[str, npt.NDArray[np.uint8], None] = None, output_model: BaseModel | None = None, model: str = "gpt-4o") -> Union[str, BaseModel]:
     client = OpenAI()
 
     content = [{"type": "input_text", "text": prompt}]
@@ -56,7 +63,7 @@ def openai_llm(prompt: str, image: Union[str, npt.NDArray[np.uint8], None] = Non
     if output_model is not None:
         # Use structured output with parse
         response = client.responses.parse(
-            model="gpt-4o-2024-08-06",
+            model=model,
             input=input_messages,
             text_format=output_model,
         )
@@ -64,7 +71,7 @@ def openai_llm(prompt: str, image: Union[str, npt.NDArray[np.uint8], None] = Non
     else:
         # Use regular text output
         response = client.responses.create(
-            model="gpt-4o",
+            model=model,
             input=input_messages
         )
         return response.output_text
@@ -121,24 +128,40 @@ async def _throttled_openai_completion_acreate(
     limiter: aiolimiter.AsyncLimiter,
 ) -> dict[str, Any]:
     async with limiter:
+        client = openai.AsyncOpenAI(
+            api_key=os.environ["OPENAI_API_KEY"],
+            organization=os.environ.get("OPENAI_ORGANIZATION", None)
+        )
+        
         for _ in range(3):
             try:
-                return await openai.Completion.acreate(  # type: ignore
-                    engine=engine,
-                    prompt=prompt,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    top_p=top_p,
-                )
-            except openai.error.RateLimitError:
+                # Handle different parameter names for different model families
+                kwargs = {
+                    "model": engine,
+                    "prompt": prompt,
+                    "temperature": temperature,
+                }
+                
+                # GPT-5 models use different parameter names
+                if engine.startswith("gpt-5"):
+                    kwargs["max_completion_tokens"] = max_tokens
+                    # GPT-5 models support top_p
+                    kwargs["top_p"] = top_p
+                else:
+                    kwargs["max_tokens"] = max_tokens
+                    kwargs["top_p"] = top_p
+                
+                response = await client.completions.create(**kwargs)
+                return {"choices": [{"text": response.choices[0].text}]}
+            except openai.RateLimitError:
                 logging.warning(
                     "OpenAI API rate limit exceeded. Sleeping for 10 seconds."
                 )
                 await asyncio.sleep(10)
-            except openai.error.APIError as e:
+            except openai.APIError as e:
                 logging.warning(f"OpenAI API error: {e}")
                 break
-        return {"choices": [{"message": {"content": ""}}]}
+        return {"choices": [{"text": ""}]}
 
 
 async def agenerate_from_openai_completion(
@@ -167,8 +190,6 @@ async def agenerate_from_openai_completion(
         raise ValueError(
             "OPENAI_API_KEY environment variable must be set when using OpenAI API."
         )
-    openai.api_key = os.environ["OPENAI_API_KEY"]
-    openai.organization = os.environ.get("OPENAI_ORGANIZATION", "")
 
     limiter = aiolimiter.AsyncLimiter(requests_per_minute)
     async_responses = [
@@ -200,17 +221,31 @@ def generate_from_openai_completion(
         raise ValueError(
             "OPENAI_API_KEY environment variable must be set when using OpenAI API."
         )
-    openai.api_key = os.environ["OPENAI_API_KEY"]
-    openai.organization = os.environ.get("OPENAI_ORGANIZATION", "")
-    response = openai.Completion.create(  # type: ignore
-        prompt=prompt,
-        engine=engine,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        top_p=top_p,
-        stop=[stop_token],
+    
+    client = OpenAI(
+        api_key=os.environ["OPENAI_API_KEY"],
+        organization=os.environ.get("OPENAI_ORGANIZATION", None)
     )
-    answer: str = response["choices"][0]["text"]
+    
+    # Handle different parameter names for different model families
+    kwargs = {
+        "prompt": prompt,
+        "model": engine,
+        "temperature": temperature,
+        "stop": [stop_token] if stop_token else None,
+    }
+    
+    # GPT-5 models use different parameter names
+    if engine.startswith("gpt-5"):
+        kwargs["max_completion_tokens"] = max_tokens
+        # GPT-5 models support top_p
+        kwargs["top_p"] = top_p
+    else:
+        kwargs["max_tokens"] = max_tokens
+        kwargs["top_p"] = top_p
+    
+    response = client.completions.create(**kwargs)
+    answer: str = response.choices[0].text
     return answer
 
 
@@ -223,16 +258,36 @@ async def _throttled_openai_chat_completion_acreate(
     limiter: aiolimiter.AsyncLimiter,
 ) -> dict[str, Any]:
     async with limiter:
+        client = openai.AsyncOpenAI(
+            api_key=os.environ["OPENAI_API_KEY"],
+            organization=os.environ.get("OPENAI_ORGANIZATION", None)
+        )
+        
         for _ in range(3):
             try:
-                return await openai.ChatCompletion.acreate(  # type: ignore
-                    model=model,
-                    messages=messages,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    top_p=top_p,
-                )
-            except openai.error.RateLimitError:
+                # Handle different parameter names for different model families
+                kwargs = {
+                    "model": model,
+                    "messages": messages,
+                }
+                
+                # GPT-5 models use different parameter names and restrictions
+                if model.startswith("gpt-5"):
+                    kwargs["max_completion_tokens"] = max_tokens
+                    # GPT-5 nano only supports temperature=1 (default), so don't include it
+                    if not model.startswith("gpt-5-nano"):
+                        kwargs["temperature"] = temperature
+                        # GPT-5 full model doesn't support top_p
+                        if not model.startswith("gpt-5-2025"):
+                            kwargs["top_p"] = top_p
+                else:
+                    kwargs["temperature"] = temperature
+                    kwargs["max_tokens"] = max_tokens
+                    kwargs["top_p"] = top_p
+                
+                response = await client.chat.completions.create(**kwargs)
+                return {"choices": [{"message": {"content": response.choices[0].message.content}}]}
+            except openai.RateLimitError:
                 logging.warning(
                     "OpenAI API rate limit exceeded. Sleeping for 10 seconds."
                 )
@@ -240,7 +295,7 @@ async def _throttled_openai_chat_completion_acreate(
             except asyncio.exceptions.TimeoutError:
                 logging.warning("OpenAI API timeout. Sleeping for 10 seconds.")
                 await asyncio.sleep(10)
-            except openai.error.APIError as e:
+            except openai.APIError as e:
                 logging.warning(f"OpenAI API error: {e}")
                 break
         return {"choices": [{"message": {"content": ""}}]}
@@ -272,8 +327,6 @@ async def agenerate_from_openai_chat_completion(
         raise ValueError(
             "OPENAI_API_KEY environment variable must be set when using OpenAI API."
         )
-    openai.api_key = os.environ["OPENAI_API_KEY"]
-    openai.organization = os.environ.get("OPENAI_ORGANIZATION", "")
 
     limiter = aiolimiter.AsyncLimiter(requests_per_minute)
     async_responses = [
@@ -300,48 +353,75 @@ def generate_from_openai_chat_completion(
     top_p: float,
     context_length: int,
     stop_token: str | None = None,
-) -> str:
+    output_model: BaseModel | None = None,
+) -> str | BaseModel:
     logger = logging.getLogger(__name__)
 
     if "OPENAI_API_KEY" not in os.environ:
         raise ValueError(
             "OPENAI_API_KEY environment variable must be set when using OpenAI API."
         )
-    openai.api_key = os.environ["OPENAI_API_KEY"]
-    openai.organization = os.environ.get("OPENAI_ORGANIZATION", "")
 
     try:
-        response = openai.ChatCompletion.create(  # type: ignore
-        model=model,
-        messages=messages,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        top_p=top_p,
-        stop=[stop_token] if stop_token else None,
-    )
-        answer: str = response["choices"][0]["message"]["content"]
-        return answer
+        client = OpenAI(
+            api_key=os.environ["OPENAI_API_KEY"],
+            organization=os.environ.get("OPENAI_ORGANIZATION", None)
+        )
+        
+        # Use structured outputs if output_model is provided
+        if output_model:
+            # Use structured outputs with beta API
+            kwargs = {
+                "model": model,
+                "messages": messages,
+                "response_format": output_model,
+                "stop": [stop_token] if stop_token else None,
+            }
+            
+            # GPT-5 models use different parameter names and restrictions
+            if model.startswith("gpt-5"):
+                kwargs["max_completion_tokens"] = max_tokens
+                # GPT-5 nano only supports temperature=1 (default), so don't include it
+                if not model.startswith("gpt-5-nano"):
+                    kwargs["temperature"] = temperature
+                    # GPT-5 full model doesn't support top_p
+                    if not model.startswith("gpt-5-2025"):
+                        kwargs["top_p"] = top_p
+            
+            try:
+                response = client.beta.chat.completions.parse(**kwargs)
+                parsed_response = response.choices[0].message.parsed
+                
+                
+                if parsed_response:
+                    return parsed_response
+                else:
+                    logger.warning(f"GPT-5 structured response was None, falling back to raw content")
+                    raw_content = response.choices[0].message.content or ""
+                    return raw_content
+                    
+            except Exception as e:
+                logger.error(f"GPT-5 structured output failed: {e}, falling back to regular chat completion")
+                # Fall through to regular completion below
+        
+        else:
+            # Use standard chat completions for non-GPT-5 models
+            kwargs = {
+                "model": model,
+                "messages": messages,
+                "stop": [stop_token] if stop_token else None,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                "top_p": top_p
+            }
+            
+            response = client.chat.completions.create(**kwargs)
+            answer: str = response.choices[0].message.content
+            
+            
+            return answer
     except Exception as e:
         logger.error(f"Error calling OpenAI chat completion: {e}")
         raise e
 
 
-# @retry_with_exponential_backoff
-# debug only
-def fake_generate_from_openai_chat_completion(
-    messages: list[dict[str, str]],
-    model: str,
-    temperature: float,
-    max_tokens: int,
-    top_p: float,
-    context_length: int,
-    stop_token: str | None = None,
-) -> str:
-    if "OPENAI_API_KEY" not in os.environ:
-        raise ValueError(
-            "OPENAI_API_KEY environment variable must be set when using OpenAI API."
-        )
-    openai.api_key = os.environ["OPENAI_API_KEY"]
-    openai.organization = os.environ.get("OPENAI_ORGANIZATION", "")
-    answer = "Let's think step-by-step. This page shows a list of links and buttons. There is a search box with the label 'Search query'. I will click on the search box to type the query. So the action I will perform is \"click [60]\"."
-    return answer
